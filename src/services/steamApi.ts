@@ -27,15 +27,26 @@ async function requestSteamApi<T>(url: string): Promise<T> {
     return res.data as T;
   }
 
-  // Direct fetch fallback
-  const response = await fetch(url);
-  if (response.status === 429) {
-    throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+  // Direct fetch fallback for web environment (e.g. GitHub Pages)
+  try {
+    const response = await fetch(url);
+    if (response.status === 429) {
+      throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+    }
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (err) {
+    // If CORS prevents direct browser fetch, route through corsproxy fallback
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const proxyRes = await fetch(proxyUrl);
+    if (!proxyRes.ok) {
+      throw new Error(`Steam API request failed (HTTP ${proxyRes.status})`);
+    }
+    return await proxyRes.json();
   }
-  if (!response.ok) {
-    throw new Error(`Steam API responded with HTTP ${response.status}`);
-  }
-  return await response.json();
+
+  throw new Error('Failed to fetch Steam API data');
 }
 
 export function parseSteamInput(input: string): { type: 'steamid' | 'vanity'; value: string } {

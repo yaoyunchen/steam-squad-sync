@@ -14,47 +14,76 @@ declare global {
   }
 }
 
+const apiMemoryCache = new Map<string, { timestamp: number; data: any }>();
+const inFlightRequests = new Map<string, Promise<any>>();
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes memory cache
+
 async function requestSteamApi<T>(url: string): Promise<T> {
-  // If Electron IPC is available, use native net fetch to avoid CORS
-  if (window.electronAPI && typeof window.electronAPI.steamRequest === 'function') {
-    const res = await window.electronAPI.steamRequest(url);
-    if (!res.success) {
-      if (res.status === 429) {
+  // 1. Check memory cache (0ms instant return)
+  const cached = apiMemoryCache.get(url);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data as T;
+  }
+
+  // 2. Deduplicate simultaneous duplicate requests
+  if (inFlightRequests.has(url)) {
+    return inFlightRequests.get(url) as Promise<T>;
+  }
+
+  const fetchPromise = (async () => {
+    // If Electron IPC is available, use native net fetch to avoid CORS
+    if (window.electronAPI && typeof window.electronAPI.steamRequest === 'function') {
+      const res = await window.electronAPI.steamRequest(url);
+      if (!res.success) {
+        if (res.status === 429) {
+          throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+        }
+        throw new Error(res.error || `Steam API request failed (HTTP ${res.status || 'Unknown'})`);
+      }
+      apiMemoryCache.set(url, { timestamp: Date.now(), data: res.data });
+      return res.data as T;
+    }
+
+    // Vercel Serverless / Edge Proxy (/api/proxy)
+    try {
+      const vercelProxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+      const response = await fetch(vercelProxyUrl);
+      if (response.status === 429) {
         throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
       }
-      throw new Error(res.error || `Steam API request failed (HTTP ${res.status || 'Unknown'})`);
+      if (response.ok) {
+        const data = await response.json();
+        apiMemoryCache.set(url, { timestamp: Date.now(), data });
+        return data as T;
+      }
+    } catch {
+      // Fall through to direct fetch
     }
-    return res.data as T;
-  }
 
-  // 1. Vercel Serverless Proxy (/api/proxy)
+    // Direct fetch fallback
+    try {
+      const response = await fetch(url);
+      if (response.status === 429) {
+        throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+      }
+      if (response.ok) {
+        const data = await response.json();
+        apiMemoryCache.set(url, { timestamp: Date.now(), data });
+        return data as T;
+      }
+    } catch {
+      // Fall through
+    }
+
+    throw new Error('Unable to connect to Steam API. Please verify your Steam API key.');
+  })();
+
+  inFlightRequests.set(url, fetchPromise);
   try {
-    const vercelProxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-    const response = await fetch(vercelProxyUrl);
-    if (response.status === 429) {
-      throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
-    }
-    if (response.ok) {
-      return await response.json();
-    }
-  } catch {
-    // Fall through to direct fetch
+    return await fetchPromise;
+  } finally {
+    inFlightRequests.delete(url);
   }
-
-  // 2. Direct fetch fallback (works if extension or dev proxy allows CORS)
-  try {
-    const response = await fetch(url);
-    if (response.status === 429) {
-      throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
-    }
-    if (response.ok) {
-      return await response.json();
-    }
-  } catch {
-    // Fall through
-  }
-
-  throw new Error('Unable to connect to Steam API. Please verify your Steam API key.');
 }
 
 export function parseSteamInput(input: string): { type: 'steamid' | 'vanity'; value: string } {

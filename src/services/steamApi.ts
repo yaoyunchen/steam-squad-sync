@@ -27,7 +27,7 @@ async function requestSteamApi<T>(url: string): Promise<T> {
     return res.data as T;
   }
 
-  // 1. Direct fetch fallback for web environment (works if extension or browser allows CORS)
+  // 1. Direct fetch fallback for web environment
   try {
     const response = await fetch(url);
     if (response.status === 429) {
@@ -40,32 +40,27 @@ async function requestSteamApi<T>(url: string): Promise<T> {
     // Fall through to proxies
   }
 
-  // 2. Web Proxy Fallback: AllOrigins JSON wrapper (supports cross-origin browser requests)
-  try {
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const proxyRes = await fetch(proxyUrl);
-    if (proxyRes.ok) {
-      const wrapper = await proxyRes.json();
-      if (wrapper && wrapper.contents) {
-        return JSON.parse(wrapper.contents) as T;
+  // 2. Try web CORS proxies
+  const proxyFormatters = [
+    (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  ];
+
+  for (const formatProxyUrl of proxyFormatters) {
+    try {
+      const proxyRes = await fetch(formatProxyUrl(url));
+      if (proxyRes.ok) {
+        const text = await proxyRes.text();
+        if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
+          return JSON.parse(text) as T;
+        }
       }
+    } catch {
+      // Try next
     }
-  } catch {
-    // Fall through to secondary proxy
   }
 
-  // 3. Web Proxy Fallback: CorsProxy
-  try {
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const proxyRes = await fetch(proxyUrl);
-    if (proxyRes.ok) {
-      return await proxyRes.json();
-    }
-  } catch {
-    // Fall through
-  }
-
-  throw new Error('Unable to connect to Steam API from browser. Please verify your Steam API key.');
+  throw new Error('Steam Web API requests are blocked by browser CORS policy on static web hosts. Please run the native Desktop App or use a browser CORS extension.');
 }
 
 export function parseSteamInput(input: string): { type: 'steamid' | 'vanity'; value: string } {

@@ -27,7 +27,21 @@ async function requestSteamApi<T>(url: string): Promise<T> {
     return res.data as T;
   }
 
-  // 1. Direct fetch fallback for web environment
+  // 1. Vercel Serverless Proxy (/api/proxy)
+  try {
+    const vercelProxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
+    const response = await fetch(vercelProxyUrl);
+    if (response.status === 429) {
+      throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+    }
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch {
+    // Fall through to direct fetch
+  }
+
+  // 2. Direct fetch fallback (works if extension or dev proxy allows CORS)
   try {
     const response = await fetch(url);
     if (response.status === 429) {
@@ -37,30 +51,10 @@ async function requestSteamApi<T>(url: string): Promise<T> {
       return await response.json();
     }
   } catch {
-    // Fall through to proxies
+    // Fall through
   }
 
-  // 2. Try web CORS proxies
-  const proxyFormatters = [
-    (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-  ];
-
-  for (const formatProxyUrl of proxyFormatters) {
-    try {
-      const proxyRes = await fetch(formatProxyUrl(url));
-      if (proxyRes.ok) {
-        const text = await proxyRes.text();
-        if (text.trim().startsWith('{') || text.trim().startsWith('[')) {
-          return JSON.parse(text) as T;
-        }
-      }
-    } catch {
-      // Try next
-    }
-  }
-
-  throw new Error('Steam Web API requests are blocked by browser CORS policy on static web hosts. Please run the native Desktop App or use a browser CORS extension.');
+  throw new Error('Unable to connect to Steam API. Please verify your Steam API key.');
 }
 
 export function parseSteamInput(input: string): { type: 'steamid' | 'vanity'; value: string } {

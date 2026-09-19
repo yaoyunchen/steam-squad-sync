@@ -10,7 +10,8 @@ import {
   CheckCircle2,
   RefreshCw,
   Heart,
-  EyeOff
+  EyeOff,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { 
   ActiveTab, 
@@ -27,6 +28,7 @@ import { MissingOneTab } from './components/MissingOneTab';
 import { RecommendationsTab } from './components/RecommendationsTab';
 import { WishlistTab } from './components/WishlistTab';
 import { HiddenTab } from './components/HiddenTab';
+import { ScheduleTab } from './components/ScheduleTab';
 
 
 
@@ -569,6 +571,18 @@ export const App: React.FC = () => {
               </button>
 
               <button
+                onClick={() => setActiveTab('schedule')}
+                className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
+                  activeTab === 'schedule'
+                    ? 'border-indigo-400 text-indigo-300 bg-steam-card/40 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                }`}
+              >
+                <CalendarIcon className="w-4 h-4 text-indigo-400" />
+                <span>Squad Schedule</span>
+              </button>
+
+              <button
                 onClick={() => setActiveTab('hidden')}
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'hidden'
@@ -655,6 +669,14 @@ export const App: React.FC = () => {
                     topSquadGenres={overlapResult.topGenres}
                     slots={slots}
                     onSwitchToMissingTab={() => setActiveTab('missing')}
+                  />
+                )}
+
+                {activeTab === 'schedule' && (
+                  <ScheduleTab
+                    slots={slots}
+                    readyGames={overlapResult.fullSquadGames}
+                    nearOverlapGames={overlapResult.nearOverlapGames}
                   />
                 )}
 

@@ -158,5 +158,42 @@ export interface UpcomingRecommendation extends ExternalRecommendation {
   isWishlistedBySquad?: boolean;
 }
 
-export type ActiveTab = 'ready' | 'missing' | 'wishlist' | 'recommendations' | 'hidden';
+export type ActiveTab = 'ready' | 'missing' | 'wishlist' | 'recommendations' | 'schedule' | 'hidden';
+
+export interface PlayerAvailability {
+  slotId: string;
+  personaName?: string;
+  timezone: string; // e.g. "America/New_York", "America/Los_Angeles", "UTC"
+  // Map of "Day-Hour" e.g. "Mon-20" -> boolean (true = free/available)
+  grid: Record<string, boolean>;
+}
+
+export interface HourlyOverlapSlot {
+  day: number; // 0 = Mon, 6 = Sun
+  dayName: string; // "Mon", "Tue", etc.
+  hour: number; // 0 to 23
+  timeLabel: string; // "8:00 PM"
+  availableSteamIds: string[]; // List of slotIds/SteamIDs free at this hour
+  availableNames: string[]; // Persona names of available players
+  missingNames: string[]; // Persona names of missing players
+  count: number; // Total available players count
+  percentage: number; // 0 to 100%
+  isFullSquad: boolean;
+}
+
+export interface GameNightEvent {
+  id: string;
+  appid: number;
+  gameName: string;
+  headerImage?: string;
+  dayName: string; // "Friday"
+  dateString: string; // "2026-09-25"
+  startTimeLabel: string; // "8:00 PM"
+  endTimeLabel: string; // "11:00 PM"
+  startIso: string;
+  endIso: string;
+  attendingNames: string[];
+  note?: string;
+  createdAt: number;
+}
 

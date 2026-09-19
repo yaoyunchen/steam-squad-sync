@@ -283,6 +283,45 @@ export const StorageService = {
     } catch (e) {
       console.warn('Failed to cache wishlist:', e);
     }
+  },
+
+  // --- Squad Availability & Gaming Schedule ---
+  getSquadSchedules(): Record<string, any> {
+    try {
+      const raw = localStorage.getItem('steam_squad_schedules');
+      if (!raw) return {};
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  },
+
+  savePlayerSchedule(slotId: string, schedule: any): void {
+    try {
+      const current = this.getSquadSchedules();
+      current[slotId] = schedule;
+      localStorage.setItem('steam_squad_schedules', JSON.stringify(current));
+    } catch (e) {
+      console.warn('Failed to save player schedule:', e);
+    }
+  },
+
+  getGameNightEvents(): any[] {
+    try {
+      const raw = localStorage.getItem('steam_squad_game_night_events');
+      if (!raw) return [];
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  },
+
+  saveGameNightEvents(events: any[]): void {
+    try {
+      localStorage.setItem('steam_squad_game_night_events', JSON.stringify(events));
+    } catch (e) {
+      console.warn('Failed to save game night events:', e);
+    }
   }
 };
 

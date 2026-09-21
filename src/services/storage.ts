@@ -29,8 +29,8 @@ function decryptSecret(value: string): string {
   }
 }
 
-const DEFAULT_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://cjuffkahiadbrwycylpm.supabase.co';
-const DEFAULT_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdWZma2FoaWFkYnJ3eWN5bHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMjAzNjQsImV4cCI6MjEwNTU5NjM2NH0.i98ic43sNz4sSFjrDc_pZkh5KkJwAw6mFaSO33zazvA';
+const DEFAULT_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || '';
+const DEFAULT_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
 
 export const StorageService = {
   // --- Steam API Key ---

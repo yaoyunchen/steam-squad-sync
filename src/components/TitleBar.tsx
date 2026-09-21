@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Minus, Square, X, Users, RefreshCw, RotateCcw } from 'lucide-react';
+import { Minus, Square, X, Users, RefreshCw, RotateCcw, Palette } from 'lucide-react';
+import { AppTheme } from '../types/steam';
 
 interface TitleBarProps {
   onRefreshAll?: () => void;
   isSyncing?: boolean;
+  theme?: AppTheme;
+  onThemeChange?: (theme: AppTheme) => void;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing, theme = 'dark', onThemeChange }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   const handleMinimize = () => {
@@ -38,7 +41,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing }) =
           <Users className="w-3.5 h-3.5 text-steam-darkest stroke-[2.5]" />
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-bold text-xs tracking-wider uppercase text-white">
+          <span className="font-bold text-xs tracking-wider uppercase text-steam-text">
             Steam Squad Sync
           </span>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-steam-border/50 text-steam-accent font-medium">
@@ -53,7 +56,24 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing }) =
       </div>
 
       {/* Right controls */}
-      <div className="flex items-center gap-1 titlebar-no-drag">
+      <div className="flex items-center gap-1.5 titlebar-no-drag">
+        {/* Theme Dropdown */}
+        {onThemeChange && (
+          <div className="flex items-center gap-1 bg-steam-dark/80 px-2 py-1 rounded border border-steam-border/50 mr-1">
+            <Palette className="w-3.5 h-3.5 text-steam-accent" />
+            <select
+              value={theme}
+              onChange={(e) => onThemeChange(e.target.value as AppTheme)}
+              className="bg-transparent text-xs text-steam-text focus:outline-none cursor-pointer font-medium"
+            >
+              <option value="dark" className="bg-steam-card text-steam-text">Dark</option>
+              <option value="light" className="bg-steam-card text-steam-text">Light</option>
+              <option value="toast" className="bg-steam-card text-steam-text">Toast</option>
+              <option value="reysol" className="bg-steam-card text-steam-text">Reysol</option>
+            </select>
+          </div>
+        )}
+
         {onRefreshAll && (
           <button
             onClick={onRefreshAll}
@@ -75,7 +95,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing }) =
 
         <button
           onClick={handleMinimize}
-          className="w-8 h-7 flex items-center justify-center text-steam-muted hover:text-white hover:bg-steam-card rounded transition-colors"
+          className="w-8 h-7 flex items-center justify-center text-steam-muted hover:text-steam-text hover:bg-steam-card rounded transition-colors"
           title="Minimize"
         >
           <Minus className="w-3.5 h-3.5" />
@@ -83,7 +103,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ onRefreshAll, isSyncing }) =
 
         <button
           onClick={handleMaximize}
-          className="w-8 h-7 flex items-center justify-center text-steam-muted hover:text-white hover:bg-steam-card rounded transition-colors"
+          className="w-8 h-7 flex items-center justify-center text-steam-muted hover:text-steam-text hover:bg-steam-card rounded transition-colors"
           title="Maximize"
         >
           <Square className="w-3 h-3" />

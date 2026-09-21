@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { 
   ActiveTab, 
+  AppTheme,
   CachedLibrary, 
   SteamUserSlot 
 } from './types/steam';
@@ -23,6 +24,7 @@ import { SteamApiService } from './services/steamApi';
 import { computeSquadOverlap, computeSquadWishlistOverlap, generateSquadRecommendations, generateTopWishlistCarousel, generateUpcomingTwoWeeksCarousel, getPrioritizedStoreResolutionAppIds } from './services/intersectionEngine';
 import { TitleBar } from './components/TitleBar';
 import { Sidebar } from './components/Sidebar';
+import { CloudSyncService, generateDeterministicSquadKey, sanitizeSchedulesForCloud, sanitizeGamesForCloud, sanitizeSlotsForCloud } from './services/cloudSync';
 import { ReadyToPlayTab } from './components/ReadyToPlayTab';
 import { MissingOneTab } from './components/MissingOneTab';
 import { RecommendationsTab } from './components/RecommendationsTab';
@@ -32,18 +34,28 @@ import { ScheduleTab } from './components/ScheduleTab';
 
 
 
-export const DEFAULT_SLOTS: SteamUserSlot[] = [
-  { id: 'slot-1', input: '' },
-  { id: 'slot-2', input: '' },
-  { id: 'slot-3', input: '' },
-  { id: 'slot-4', input: '' },
+const DEFAULT_SLOTS: SteamUserSlot[] = [
+  { id: 'slot-1', input: 'https://steamcommunity.com/profiles/76561198003985811', steamId: '76561198003985811', personaName: 'RezWingz' },
+  { id: 'slot-2', input: 'https://steamcommunity.com/profiles/76561198034659844', steamId: '76561198034659844', personaName: 'Reysol' },
+  { id: 'slot-3', input: 'https://steamcommunity.com/profiles/76561198043877417', steamId: '76561198043877417', personaName: 'K derp' },
+  { id: 'slot-4', input: 'https://steamcommunity.com/profiles/76561198864094111', steamId: '76561198864094111', personaName: 'toast' },
 ];
 
-export const DEFAULT_API_KEY = '';
+const DEFAULT_API_KEY = 'EB3D55C7CF9D061681597181ED1A426A';
 
 export const App: React.FC = () => {
-  const [apiKey, setApiKey] = useState<string>(() => StorageService.getApiKey() || '');
-  const [slots, setSlots] = useState<SteamUserSlot[]>(DEFAULT_SLOTS);
+  const [apiKey, setApiKey] = useState<string>(() => {
+    const saved = StorageService.getApiKey();
+    return (saved && saved.trim().length > 0) ? saved : DEFAULT_API_KEY;
+  });
+
+  const [slots, setSlots] = useState<SteamUserSlot[]>(() => {
+    const saved = StorageService.getSavedSlots();
+    if (saved && saved.length >= 2 && saved.some(s => s.input && s.input.trim().length > 0)) {
+      return saved;
+    }
+    return DEFAULT_SLOTS;
+  });
   const [activeTab, setActiveTab] = useState<ActiveTab>('ready');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [libraries, setLibraries] = useState<Record<string, CachedLibrary>>({});
@@ -56,7 +68,31 @@ export const App: React.FC = () => {
     const saved = StorageService.getSquadOverrides();
     return saved ? saved : [];
   });
+  const [theme, setThemeState] = useState<AppTheme>(() => StorageService.getTheme());
   const [hiddenAppIds, setHiddenAppIds] = useState<number[]>(() => StorageService.getHiddenAppIds());
+  const [roomCode, setRoomCode] = useState('');
+
+  const activeSquadKey = useMemo(() => {
+    return generateDeterministicSquadKey(slots);
+  }, [slots]);
+
+  useEffect(() => {
+    if (activeSquadKey) {
+      setRoomCode(activeSquadKey);
+      const config = StorageService.getSupabaseConfig();
+      StorageService.setSupabaseConfig(config.url, config.anonKey, activeSquadKey);
+    }
+  }, [activeSquadKey]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const handleThemeChange = (newTheme: AppTheme) => {
+    setThemeState(newTheme);
+    StorageService.setTheme(newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
   const [wishlists, setWishlists] = useState<Record<string, any[]>>({});
 
   const [resolvingProgress, setResolvingProgress] = useState<{ current: number; total: number } | null>(null);
@@ -69,6 +105,79 @@ export const App: React.FC = () => {
   const handleToggleHideGame = (appid: number) => {
     const updated = StorageService.toggleHideAppId(appid);
     setHiddenAppIds([...updated]);
+  };
+
+  const handleJoinSquadRoom = async (code: string) => {
+    const config = StorageService.getSupabaseConfig();
+    const url = config.url;
+    const anonKey = config.anonKey;
+    const targetRoomCode = code.trim().toUpperCase() || config.roomCode;
+
+    if (!url || !anonKey || !targetRoomCode) {
+      setStatusMessage({ type: 'error', text: 'Supabase URL & Anon Key must be configured to join squad room.' });
+      return;
+    }
+
+    setIsSyncing(true);
+    setStatusMessage({ type: 'info', text: `Joining Squad Room ${targetRoomCode}...` });
+
+    try {
+      const payload = await CloudSyncService.fetchSquadPayload(url, anonKey, targetRoomCode);
+      if (!payload) {
+        setStatusMessage({ type: 'error', text: `No squad room data found for ${targetRoomCode}.` });
+        return;
+      }
+
+      let loadedSlots = slots;
+      if (payload.slots && payload.slots.length >= 2) {
+        loadedSlots = payload.slots.map(s => ({
+          id: s.id,
+          input: s.input,
+          steamId: s.steamId,
+          personaName: s.personaName,
+          avatarUrl: s.avatarUrl,
+        }));
+        setSlots(loadedSlots);
+        StorageService.saveSlots(loadedSlots);
+      }
+
+      if (payload.schedules) {
+        const currentScheds = StorageService.getSquadSchedules();
+        const mergedScheds = { ...currentScheds, ...payload.schedules };
+        StorageService.saveSquadSchedules(mergedScheds);
+      }
+
+      StorageService.setSupabaseConfig(url, anonKey, targetRoomCode);
+      setRoomCode(targetRoomCode);
+
+      // Restore libraries from saved local cache for each player slot
+      const restoredLibs: Record<string, CachedLibrary> = { ...libraries };
+      let missingCacheCount = 0;
+      loadedSlots.forEach(s => {
+        if (s.steamId) {
+          const cached = StorageService.getCachedLibrary(s.steamId);
+          if (cached) {
+            restoredLibs[s.steamId] = cached;
+          } else {
+            missingCacheCount++;
+          }
+        }
+      });
+      setLibraries(restoredLibs);
+
+      if (missingCacheCount > 0 && apiKey.trim()) {
+        setStatusMessage({ type: 'success', text: `Joined Squad Room ${targetRoomCode}! Fetching libraries for new players...` });
+        setTimeout(() => {
+          handleSyncSquad();
+        }, 300);
+      } else {
+        setStatusMessage({ type: 'success', text: `Joined Squad Room ${targetRoomCode}! Loaded ${loadedSlots.length} players & saved game data.` });
+      }
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: 'Failed to join squad room: ' + (err.message || 'Unknown error') });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleClearAllHidden = () => {
@@ -98,7 +207,8 @@ export const App: React.FC = () => {
   // Initialize from storage or defaults on load
   useEffect(() => {
     const savedKey = StorageService.getApiKey();
-    setApiKey(savedKey || '');
+    const effectiveKey = (savedKey && savedKey.trim().length > 0) ? savedKey : DEFAULT_API_KEY;
+    setApiKey(effectiveKey);
 
     const savedSlots = StorageService.getSavedSlots();
     const activeSlots = (savedSlots && savedSlots.length >= 2 && savedSlots.length <= 8)
@@ -157,6 +267,7 @@ export const App: React.FC = () => {
 
   // Add a single player slot (up to 8)
   const handleAddSlot = () => {
+    setRoomCode('');
     setSlots(prev => {
       if (prev.length >= 8) return prev;
       const newSlot: SteamUserSlot = {
@@ -171,6 +282,7 @@ export const App: React.FC = () => {
 
   // Remove a player slot (minimum 2)
   const handleRemoveSlot = (slotId: string) => {
+    setRoomCode('');
     setSlots(prev => {
       if (prev.length <= 2) return prev;
       const updated = prev.filter(s => s.id !== slotId);
@@ -182,6 +294,7 @@ export const App: React.FC = () => {
   // Adjust squad size directly between 2 and 8
   const handleSetSquadSize = (targetSize: number) => {
     const size = Math.max(2, Math.min(8, targetSize));
+    setRoomCode('');
     setSlots(prev => {
       if (prev.length === size) return prev;
       let updated: SteamUserSlot[];
@@ -348,6 +461,30 @@ export const App: React.FC = () => {
     const allAppIdsToResolve = Array.from(new Set([...prioritizedAppIds, ...Array.from(wishlistedAppIds)]));
     runBackgroundStoreResolution(allAppIdsToResolve);
 
+    // Auto-save updated squad slots & availability to cloud room code if configured
+    const cloudConfig = StorageService.getSupabaseConfig();
+    if (cloudConfig.url && cloudConfig.anonKey && roomCode) {
+      try {
+        const currentScheds = StorageService.getSquadSchedules();
+        const cleanedSchedules = sanitizeSchedulesForCloud(currentScheds);
+        const cleanedReady = sanitizeGamesForCloud(overlapResult.fullSquadGames);
+        const cleanedNear = sanitizeGamesForCloud(overlapResult.nearOverlapGames);
+        const cleanedSlots = sanitizeSlotsForCloud(activeSlots);
+
+        CloudSyncService.pushSquadPayload(cloudConfig.url, cloudConfig.anonKey, roomCode, {
+          slots: cleanedSlots,
+          schedules: cleanedSchedules,
+          sharedGames: {
+            readyGames: cleanedReady,
+            nearOverlapGames: cleanedNear,
+            updatedAt: Date.now(),
+          },
+        });
+      } catch (cloudErr) {
+        console.warn('Auto cloud sync push warning:', cloudErr);
+      }
+    }
+
     if (privateCount > 0) {
       setStatusMessage({
         type: 'error',
@@ -361,7 +498,7 @@ export const App: React.FC = () => {
     } else {
       setStatusMessage({
         type: 'success',
-        text: `Successfully synced libraries for all ${activeSlots.length} squad members!`,
+        text: `Successfully synced libraries for all ${activeSlots.length} squad members & updated Cloud Room ${roomCode.toUpperCase()}!`,
       });
     }
   };
@@ -448,12 +585,32 @@ export const App: React.FC = () => {
     return overlapResult.allSquadGames.filter(g => hiddenAppIds.includes(g.appid));
   }, [overlapResult.allSquadGames, hiddenAppIds, validSteamIds.length]);
 
+  const unhiddenFullSquadGames = useMemo(
+    () => overlapResult.fullSquadGames.filter(g => !hiddenAppIds.includes(g.appid)),
+    [overlapResult.fullSquadGames, hiddenAppIds]
+  );
+
+  const unhiddenNearOverlapGames = useMemo(
+    () => overlapResult.nearOverlapGames.filter(g => !hiddenAppIds.includes(g.appid)),
+    [overlapResult.nearOverlapGames, hiddenAppIds]
+  );
+
+  const unhiddenTwoPlayerGames = useMemo(
+    () => overlapResult.twoPlayerGames.filter(g => !hiddenAppIds.includes(g.appid)),
+    [overlapResult.twoPlayerGames, hiddenAppIds]
+  );
+
+  const unhiddenAllSquadGames = useMemo(
+    () => overlapResult.allSquadGames.filter(g => !hiddenAppIds.includes(g.appid)),
+    [overlapResult.allSquadGames, hiddenAppIds]
+  );
+
   const activePlayerCount = validSteamIds.length;
 
   return (
     <div className="flex flex-col h-screen w-screen bg-steam-darkest text-steam-text overflow-hidden select-none">
       {/* Windows 11 Fluent Titlebar */}
-      <TitleBar onRefreshAll={handleSyncSquad} isSyncing={isSyncing} />
+      <TitleBar onRefreshAll={handleSyncSquad} isSyncing={isSyncing} theme={theme} onThemeChange={handleThemeChange} />
 
       {/* Main Workspace Layout */}
       <div className="flex flex-1 overflow-hidden">
@@ -467,6 +624,9 @@ export const App: React.FC = () => {
           onAddSlot={handleAddSlot}
           onRemoveSlot={handleRemoveSlot}
           onSetSquadSize={handleSetSquadSize}
+          onJoinSquadRoom={handleJoinSquadRoom}
+          roomCode={roomCode}
+          onRoomCodeChange={setRoomCode}
           onSyncSquad={handleSyncSquad}
           onClearCache={handleClearCache}
           onResetAllData={handleResetAllData}
@@ -476,7 +636,7 @@ export const App: React.FC = () => {
         />
 
         {/* Central Dashboard & Tab Panel */}
-        <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-b from-steam-darker to-steam-darkest">
+        <main className="flex-1 flex flex-col overflow-hidden bg-steam-darkest transition-colors duration-200">
           {/* Status Alert Banner */}
           {statusMessage && (
             <div
@@ -515,7 +675,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'ready'
                     ? 'border-steam-green text-steam-green bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <Gamepad2 className="w-4 h-4" />
@@ -530,7 +690,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'missing'
                     ? 'border-amber-400 text-amber-300 bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <UserMinus className="w-4 h-4" />
@@ -545,7 +705,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'wishlist'
                     ? 'border-purple-400 text-purple-300 bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <Heart className="w-4 h-4 text-purple-400 fill-purple-400/20" />
@@ -560,7 +720,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'recommendations'
                     ? 'border-purple-400 text-purple-300 bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <Sparkles className="w-4 h-4 text-purple-400" />
@@ -575,7 +735,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'schedule'
                     ? 'border-indigo-400 text-indigo-300 bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <CalendarIcon className="w-4 h-4 text-indigo-400" />
@@ -587,7 +747,7 @@ export const App: React.FC = () => {
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${
                   activeTab === 'hidden'
                     ? 'border-slate-400 text-slate-200 bg-steam-card/40 rounded-t-lg'
-                    : 'border-transparent text-steam-muted hover:text-white hover:bg-steam-card/20 rounded-t-lg'
+                    : 'border-transparent text-steam-muted hover:text-steam-text hover:bg-steam-card/20 rounded-t-lg'
                 }`}
               >
                 <EyeOff className="w-4 h-4" />
@@ -625,10 +785,10 @@ export const App: React.FC = () => {
               <>
                 {activeTab === 'ready' && (
                   <ReadyToPlayTab
-                    games={overlapResult.fullSquadGames}
-                    allSquadGames={overlapResult.allSquadGames}
-                    nearOverlapGames={overlapResult.nearOverlapGames}
-                    twoPlayerGames={overlapResult.twoPlayerGames}
+                    games={unhiddenFullSquadGames}
+                    allSquadGames={unhiddenAllSquadGames}
+                    nearOverlapGames={unhiddenNearOverlapGames}
+                    twoPlayerGames={unhiddenTwoPlayerGames}
                     slots={slots}
                     activePlayerCount={activePlayerCount}
                     filterMultiplayerOnly={filterMultiplayerOnly}
@@ -642,7 +802,7 @@ export const App: React.FC = () => {
 
                 {activeTab === 'missing' && (
                   <MissingOneTab
-                    games={overlapResult.nearOverlapGames.filter(g => !hiddenAppIds.includes(g.appid))}
+                    games={unhiddenNearOverlapGames}
                     slots={slots}
                     activePlayerCount={activePlayerCount}
                     filterMultiplayerOnly={filterMultiplayerOnly}
@@ -665,7 +825,7 @@ export const App: React.FC = () => {
                     topWishlistGames={topWishlistCarousel}
                     upcomingTwoWeeksGames={upcomingTwoWeeksCarousel}
                     externalRecommendations={externalRecommendations}
-                    nearOverlapGames={overlapResult.nearOverlapGames}
+                    nearOverlapGames={unhiddenNearOverlapGames}
                     topSquadGenres={overlapResult.topGenres}
                     slots={slots}
                     onSwitchToMissingTab={() => setActiveTab('missing')}
@@ -675,8 +835,8 @@ export const App: React.FC = () => {
                 {activeTab === 'schedule' && (
                   <ScheduleTab
                     slots={slots}
-                    readyGames={overlapResult.fullSquadGames}
-                    nearOverlapGames={overlapResult.nearOverlapGames}
+                    readyGames={unhiddenFullSquadGames}
+                    nearOverlapGames={unhiddenNearOverlapGames}
                   />
                 )}
 

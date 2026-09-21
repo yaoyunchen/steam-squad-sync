@@ -44,6 +44,30 @@ async function requestSteamApi<T>(url: string): Promise<T> {
       return res.data as T;
     }
 
+    // Vite Dev Server Proxy Fallback (Bypasses CORS during local browser dev)
+    try {
+      let devProxyUrl = url;
+      if (url.startsWith('https://api.steampowered.com')) {
+        devProxyUrl = url.replace('https://api.steampowered.com', '/steam-api');
+      } else if (url.startsWith('https://store.steampowered.com')) {
+        devProxyUrl = url.replace('https://store.steampowered.com', '/steam-store');
+      }
+
+      if (devProxyUrl !== url) {
+        const response = await fetch(devProxyUrl);
+        if (response.status === 429) {
+          throw new Error('Valve Steam API rate limit reached (HTTP 429). Please wait a few minutes.');
+        }
+        if (response.ok) {
+          const data = await response.json();
+          apiMemoryCache.set(url, { timestamp: Date.now(), data });
+          return data as T;
+        }
+      }
+    } catch {
+      // Fall through
+    }
+
     // Vercel Serverless / Edge Proxy (/api/proxy)
     try {
       const vercelProxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
@@ -270,16 +294,15 @@ export const SteamApiService = {
     avatarUrl?: string,
     forceRefresh = false
   ): Promise<CachedLibrary> {
-    // Check local cache if not forcing refresh
-    if (!forceRefresh) {
-      const cached = StorageService.getCachedLibrary(steamId);
-      if (cached) {
-        return cached;
-      }
-    }
+    const cached = StorageService.getCachedLibrary(steamId);
 
-    // Fetch from Steam API
+    // Fetch live games from Steam API
     const { games, isPrivate } = await this.getOwnedGames(apiKey, steamId);
+
+    // Smart Resync: If cached library exists and user's total amount of games is unchanged, reuse cached library!
+    if (!forceRefresh && cached && cached.games && cached.games.length === games.length && !cached.isPrivate) {
+      return cached;
+    }
 
     const library: CachedLibrary = {
       steamId,

@@ -1,3 +1,12 @@
+function withOpacity(variableName) {
+  return ({ opacityValue }) => {
+    if (opacityValue !== undefined) {
+      return `rgba(var(${variableName}), ${opacityValue})`;
+    }
+    return `rgb(var(${variableName}))`;
+  };
+}
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -9,29 +18,29 @@ export default {
     extend: {
       colors: {
         steam: {
-          darkest: '#0e141b',
-          darker: '#121a24',
-          dark: '#17202d',
-          card: '#1b2838',
-          cardHover: '#233348',
-          border: '#2a475e',
-          accent: '#66c0f4',
-          accentHover: '#1999ff',
-          neon: '#00ffee',
-          text: '#c6d4df',
-          muted: '#8f98a0',
-          green: '#a4d007',
-          success: '#5c7e10',
-          missing: '#ff5c5c',
+          darkest: withOpacity('--steam-darkest-rgb'),
+          darker: withOpacity('--steam-darker-rgb'),
+          dark: withOpacity('--steam-dark-rgb'),
+          card: withOpacity('--steam-card-rgb'),
+          cardHover: withOpacity('--steam-card-hover-rgb'),
+          border: withOpacity('--steam-border-rgb'),
+          accent: withOpacity('--steam-accent-rgb'),
+          accentHover: withOpacity('--steam-accent-hover-rgb'),
+          neon: withOpacity('--steam-neon-rgb'),
+          text: withOpacity('--steam-text-rgb'),
+          muted: withOpacity('--steam-muted-rgb'),
+          green: withOpacity('--steam-green-rgb'),
+          success: withOpacity('--steam-success-rgb'),
+          missing: withOpacity('--steam-missing-rgb'),
         },
       },
       fontFamily: {
         sans: ['Segoe UI Variable', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        'glow-accent': '0 0 15px rgba(102, 192, 244, 0.35)',
-        'glow-green': '0 0 15px rgba(164, 208, 7, 0.35)',
-        'card-hover': '0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 0 12px rgba(102, 192, 244, 0.2)',
+        'glow-accent': '0 0 15px rgba(var(--steam-accent-rgb), 0.35)',
+        'glow-green': '0 0 15px rgba(var(--steam-green-rgb), 0.35)',
+        'card-hover': '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 12px rgba(var(--steam-accent-rgb), 0.2)',
       },
     },
   },

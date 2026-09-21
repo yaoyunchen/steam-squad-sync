@@ -6,7 +6,8 @@ import {
   ExternalLink, 
   Sparkles, 
   Check, 
-  Bookmark
+  Bookmark,
+  Tag
 } from 'lucide-react';
 import { SquadWishlistAnalysis, SteamUserSlot } from '../types/steam';
 import { StorageService } from '../services/storage';
@@ -30,6 +31,17 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
   const [selectedSteamId, setSelectedSteamId] = useState<string>(activeSlots[0]?.steamId || '');
   const [viewMode, setViewMode] = useState<'overlaps' | 'individual'>('overlaps');
   const [searchQuery, setSearchQuery] = useState('');
+  const [onSaleOnly, setOnSaleOnly] = useState(false);
+
+  const saleAlertGames = useMemo(() => {
+    return wishlistAnalyses.filter(
+      (g) => (g.discountPercent && g.discountPercent > 0) || (g.priceFormatted && g.priceFormatted.toLowerCase().includes('free'))
+    );
+  }, [wishlistAnalyses]);
+
+  const maxDiscount = useMemo(() => {
+    return Math.max(...saleAlertGames.map((g) => g.discountPercent || 0), 0);
+  }, [saleAlertGames]);
 
   const getResolvedGameName = (game: { appid: number; name?: string }) => {
     if (game.name && !game.name.startsWith('App ') && !game.name.startsWith('App #')) {
@@ -57,6 +69,11 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
         const displayName = getResolvedGameName(game);
         const matchesQuery = displayName.toLowerCase().includes(searchQuery.toLowerCase());
         if (!matchesQuery) return false;
+
+        if (onSaleOnly && !(game.discountPercent && game.discountPercent > 0)) {
+          return false;
+        }
+
         // Require either 2+ wishlisted OR (1+ wishlisted AND 1+ owned)
         return game.wishlistCount >= 2 || (game.wishlistCount >= 1 && game.ownershipCount >= 1);
       })
@@ -174,6 +191,40 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Steam Sale Alert Banner */}
+      {saleAlertGames.length > 0 && (
+        <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/70 via-purple-950/50 to-steam-card border border-rose-500/50 flex flex-wrap items-center justify-between gap-4 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center">
+              <Tag className="w-5 h-5 text-rose-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                🔥 Steam Sale Alert! Up to -{maxDiscount}% OFF
+                <span className="text-xs px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 font-extrabold border border-rose-400/40">
+                  {saleAlertGames.length} Wishlist Games Discounted
+                </span>
+              </h3>
+              <p className="text-xs text-rose-200/80">
+                Great time for squad group buys! Squad member wishlist titles are currently on sale on the Steam Store.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setOnSaleOnly(!onSaleOnly)}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1.5 ${
+              onSaleOnly
+                ? 'bg-rose-600 text-white border-rose-400 shadow-glow-accent'
+                : 'bg-rose-950/80 border-rose-500/60 text-rose-200 hover:bg-rose-900/80'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{onSaleOnly ? 'Showing On Sale Only' : `Filter: ${saleAlertGames.length} On Sale`}</span>
+          </button>
+        </div>
+      )}
 
       {/* View Sub-header & Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">

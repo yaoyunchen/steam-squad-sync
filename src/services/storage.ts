@@ -29,15 +29,19 @@ function decryptSecret(value: string): string {
   }
 }
 
+const DEFAULT_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || '';
+const DEFAULT_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+
 export const StorageService = {
   // --- Steam API Key ---
   getApiKey(): string {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.API_KEY);
-      if (!stored) return '';
-      return decryptSecret(stored) || '';
+      if (!stored) return 'EB3D55C7CF9D061681597181ED1A426A';
+      const decrypted = decryptSecret(stored);
+      return (decrypted && decrypted.trim().length > 0) ? decrypted : 'EB3D55C7CF9D061681597181ED1A426A';
     } catch {
-      return '';
+      return 'EB3D55C7CF9D061681597181ED1A426A';
     }
   },
 
@@ -306,6 +310,14 @@ export const StorageService = {
     }
   },
 
+  saveSquadSchedules(schedules: Record<string, any>): void {
+    try {
+      localStorage.setItem('steam_squad_schedules', JSON.stringify(schedules));
+    } catch (e) {
+      console.warn('Failed to save squad schedules:', e);
+    }
+  },
+
   getGameNightEvents(): any[] {
     try {
       const raw = localStorage.getItem('steam_squad_game_night_events');
@@ -322,6 +334,72 @@ export const StorageService = {
     } catch (e) {
       console.warn('Failed to save game night events:', e);
     }
-  }
-};
+  },
 
+  // --- App Theme ---
+  getTheme(): any {
+    try {
+      const stored = localStorage.getItem('steam_squad_theme');
+      if (stored === 'light' || stored === 'toast') return stored;
+      return 'dark';
+    } catch {
+      return 'dark';
+    }
+  },
+
+  setTheme(theme: string): void {
+    try {
+      localStorage.setItem('steam_squad_theme', theme);
+    } catch (e) {
+      console.warn('Failed to save theme:', e);
+    }
+  },
+
+  // --- Recurring Availability Patterns ---
+  getRecurringPatterns(): Record<string, Record<string, boolean>> {
+    try {
+      const raw = localStorage.getItem('steam_squad_recurring_patterns');
+      if (!raw) return {};
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  },
+
+  savePlayerRecurringPattern(slotId: string, pattern: Record<string, boolean>): void {
+    try {
+      const current = this.getRecurringPatterns();
+      current[slotId] = pattern;
+      localStorage.setItem('steam_squad_recurring_patterns', JSON.stringify(current));
+    } catch (e) {
+      console.warn('Failed to save recurring pattern:', e);
+    }
+  },
+
+  // --- Supabase Cloud Sync Config ---
+  getSupabaseConfig(): { url: string; anonKey: string; roomCode: string } {
+    try {
+      const url = localStorage.getItem('steam_squad_supabase_url') || DEFAULT_SUPABASE_URL;
+      const rawKey = localStorage.getItem('steam_squad_supabase_key') || '';
+      const anonKey = rawKey ? decryptSecret(rawKey) : DEFAULT_SUPABASE_ANON_KEY;
+      const roomCode = localStorage.getItem('steam_squad_room_code') || '';
+      return { url, anonKey, roomCode };
+    } catch {
+      return { url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY, roomCode: '' };
+    }
+  },
+
+  setSupabaseConfig(url: string, anonKey: string, roomCode: string): void {
+    try {
+      localStorage.setItem('steam_squad_supabase_url', url.trim());
+      if (anonKey.trim()) {
+        localStorage.setItem('steam_squad_supabase_key', encryptSecret(anonKey.trim()));
+      } else {
+        localStorage.removeItem('steam_squad_supabase_key');
+      }
+      localStorage.setItem('steam_squad_room_code', roomCode.trim().toUpperCase());
+    } catch (e) {
+      console.warn('Failed to save Supabase config:', e);
+    }
+  },
+};

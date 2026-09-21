@@ -14,7 +14,9 @@ import {
   Loader2,
   RefreshCw,
   Plus,
-  X
+  X,
+  Cloud,
+  Download
 } from 'lucide-react';
 import { SteamUserSlot } from '../types/steam';
 
@@ -27,6 +29,9 @@ interface SidebarProps {
   onAddSlot: () => void;
   onRemoveSlot: (slotId: string) => void;
   onSetSquadSize: (size: number) => void;
+  onJoinSquadRoom?: (code: string) => void;
+  roomCode?: string;
+  onRoomCodeChange?: (code: string) => void;
 
   onSyncSquad: () => void;
   onClearCache: () => void;
@@ -45,7 +50,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onAddSlot,
   onRemoveSlot,
   onSetSquadSize,
-
+  onJoinSquadRoom,
+  roomCode = 'SQUAD-9821',
+  onRoomCodeChange,
   onSyncSquad,
   onClearCache,
   onResetAllData,
@@ -117,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-steam-accent" />
-            <h2 className="text-sm font-semibold text-white tracking-wide uppercase">
+            <h2 className="text-sm font-semibold text-steam-text tracking-wide uppercase">
               Squad Configuration
             </h2>
           </div>
@@ -152,12 +159,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               value={apiKey}
               onChange={(e) => onApiKeyChange(e.target.value)}
               placeholder="Paste 32-char Valve API Key..."
-              className="w-full bg-steam-darkest border border-steam-border/60 rounded px-2.5 py-1.5 text-xs text-white placeholder-steam-muted/60 focus:outline-none focus:border-steam-accent pr-8 transition-colors"
+              className="w-full bg-steam-darkest border border-steam-border/60 rounded px-2.5 py-1.5 text-xs text-steam-text placeholder-steam-muted/60 focus:outline-none focus:border-steam-accent pr-8 transition-colors"
             />
             <button
               type="button"
               onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-2 top-2 text-steam-muted hover:text-white transition-colors"
+              className="absolute right-2 top-2 text-steam-muted hover:text-steam-text transition-colors"
             >
               {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
@@ -166,6 +173,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-1 text-[10px] text-steam-muted">
             <Lock className="w-2.5 h-2.5 text-steam-green" />
             <span>Encrypted in local client storage</span>
+          </div>
+        </div>
+
+        {/* Squad Room Key 1-Click Join */}
+        <div className="bg-steam-dark p-3 rounded-lg border border-steam-border/50 space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-medium text-steam-text flex items-center gap-1.5">
+              <Cloud className="w-3.5 h-3.5 text-steam-accent" />
+              <span>Squad Room Key</span>
+            </label>
+            <span className="text-[10px] text-steam-accent font-semibold" title="Squad key is automatically unique to your active player combination">
+              Auto Squad ID
+            </span>
+          </div>
+
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              value={roomCode}
+              onChange={(e) => onRoomCodeChange && onRoomCodeChange(e.target.value.toUpperCase())}
+              placeholder="e.g. 982104"
+              className="flex-1 bg-steam-card border border-steam-border/60 rounded px-2.5 py-1.5 text-xs text-steam-accent font-mono uppercase font-bold focus:outline-none focus:border-steam-accent"
+            />
+            <button
+              onClick={() => onJoinSquadRoom && onJoinSquadRoom(roomCode)}
+              disabled={isSyncing}
+              className="px-3 py-1.5 bg-steam-accent hover:bg-steam-accentHover text-steam-darkest text-xs font-bold rounded flex items-center gap-1 transition shadow"
+              title="Lookup cloud payload & load squad data for this room key"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Join</span>
+            </button>
           </div>
         </div>
 
@@ -191,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`py-1 text-xs font-bold rounded transition-all ${
                   slots.length === size
                     ? 'bg-steam-accent text-steam-darkest shadow-glow-accent ring-1 ring-steam-accent'
-                    : 'bg-steam-darkest hover:bg-steam-card text-steam-muted hover:text-white border border-steam-border/40'
+                    : 'bg-steam-darkest hover:bg-steam-card text-steam-muted hover:text-steam-text border border-steam-border/40'
                 }`}
                 title={`Set squad capacity to ${size} players`}
               >
@@ -204,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Slots List */}
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-steam-muted px-0.5">
-            <span className="font-semibold text-white">Player Accounts ({slots.length})</span>
+            <span className="font-semibold text-steam-text">Player Accounts ({slots.length})</span>
             <span className="text-[11px] text-steam-accent font-medium">
               {validSlotsCount} Verified
             </span>
@@ -253,12 +292,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onChange={(e) => onSlotChange(slot.id, e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && onResolveSlot(slot.id)}
                   placeholder="SteamID64, vanity name or URL..."
-                  className="flex-1 bg-steam-darkest border border-steam-border/60 rounded px-2 py-1 text-xs text-white placeholder-steam-muted/50 focus:outline-none focus:border-steam-accent"
+                  className="flex-1 bg-steam-darkest border border-steam-border/60 rounded px-2 py-1 text-xs text-steam-text placeholder-steam-muted/50 focus:outline-none focus:border-steam-accent"
                 />
                 <button
                   onClick={() => onResolveSlot(slot.id)}
                   disabled={!slot.input.trim() || slot.isLoading}
-                  className="px-2 py-1 bg-steam-card hover:bg-steam-cardHover border border-steam-border/80 rounded text-[11px] text-steam-text hover:text-white disabled:opacity-40 transition-colors"
+                  className="px-2 py-1 bg-steam-card hover:bg-steam-cardHover border border-steam-border/80 rounded text-[11px] text-steam-text hover:text-steam-accent disabled:opacity-40 transition-colors"
                 >
                   Verify
                 </button>
@@ -274,7 +313,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs font-semibold text-white truncate">
+                      <p className="text-xs font-semibold text-steam-text truncate">
                         {slot.personaName || 'Steam User'}
                       </p>
                       {slot.gameCount !== undefined && (

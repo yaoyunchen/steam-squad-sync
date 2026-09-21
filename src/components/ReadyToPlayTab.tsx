@@ -119,9 +119,9 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
     const primaryAppIds = new Set(filteredGames.map((g) => g.appid));
 
     return allSquadGames
-      .filter((g) => !primaryAppIds.has(g.appid) && g.name.toLowerCase().includes(cleanQuery))
+      .filter((g) => !hiddenAppIds.includes(g.appid) && !primaryAppIds.has(g.appid) && g.name.toLowerCase().includes(cleanQuery))
       .sort((a, b) => b.ownershipCount - a.ownershipCount || b.totalSquadPlaytimeMinutes - a.totalSquadPlaytimeMinutes);
-  }, [searchQuery, filteredGames, allSquadGames]);
+  }, [searchQuery, filteredGames, allSquadGames, hiddenAppIds]);
 
   const totalSquadHours = useMemo(() => {
     return Math.round(games.reduce((acc, g) => acc + g.totalSquadPlaytimeMinutes, 0) / 60);
@@ -149,7 +149,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             <Gamepad2 className="w-5 h-5 text-steam-green" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <h2 className="text-base font-bold text-steam-text flex items-center gap-2">
               Ready to Play ({activePlayerCount}/{activePlayerCount} Owned)
               <span className="text-xs px-2 py-0.5 rounded-full bg-steam-green/20 text-steam-green font-semibold">
                 {games.length} Games
@@ -168,7 +168,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
               filterMultiplayerOnly
                 ? 'bg-emerald-950/60 border-steam-green/50 text-emerald-300 hover:bg-emerald-900/60 shadow-sm'
-                : 'bg-steam-card hover:bg-steam-cardHover border-steam-border text-steam-muted hover:text-white'
+                : 'bg-steam-card hover:bg-steam-cardHover border-steam-border text-steam-muted hover:text-steam-text'
             }`}
             title="Click to toggle: Show only Multiplayer/Co-Op games vs All shared games"
           >
@@ -182,7 +182,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
               fitSquadOnly
                 ? 'bg-indigo-950/70 border-indigo-500/60 text-indigo-300 hover:bg-indigo-900/70 shadow-sm'
-                : 'bg-steam-card hover:bg-steam-cardHover border-steam-border text-steam-muted hover:text-white'
+                : 'bg-steam-card hover:bg-steam-cardHover border-steam-border text-steam-muted hover:text-steam-text'
             }`}
             title={`Hide games that cannot accommodate all ${activePlayerCount} active squad members`}
           >
@@ -196,7 +196,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
               showInspector
                 ? 'bg-steam-accent text-steam-darkest font-bold shadow-glow-accent border-steam-accent'
-                : 'bg-steam-card hover:bg-steam-cardHover text-steam-muted hover:text-white border-steam-border/60'
+                : 'bg-steam-card hover:bg-steam-cardHover text-steam-muted hover:text-steam-text border-steam-border/60'
             }`}
             title="Inspect squad library ownership per player for any game"
           >
@@ -208,7 +208,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-steam-darkest/60 border border-steam-border/40">
             <Trophy className="w-4 h-4 text-steam-accent" />
             <span className="text-xs text-steam-muted">Squad Playtime:</span>
-            <span className="text-xs font-bold text-white">{totalSquadHours.toLocaleString()} Hours</span>
+            <span className="text-xs font-bold text-steam-text">{totalSquadHours.toLocaleString()} Hours</span>
           </div>
         </div>
       </div>
@@ -219,7 +219,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-steam-accent" />
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+              <h3 className="text-xs font-bold text-steam-text uppercase tracking-wider">
                 Squad Library Ownership Inspector
               </h3>
             </div>
@@ -235,7 +235,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
               value={inspectorSearch}
               onChange={(e) => setInspectorSearch(e.target.value)}
               placeholder="Search any game in squad libraries (e.g. Deadlock, CS2, Stardew Valley)..."
-              className="w-full bg-steam-darkest border border-steam-border/60 rounded-lg pl-9 pr-3 py-2 text-xs text-white placeholder-steam-muted focus:outline-none focus:border-steam-accent"
+              className="w-full bg-steam-darkest border border-steam-border/60 rounded-lg pl-9 pr-3 py-2 text-xs text-steam-text placeholder-steam-muted focus:outline-none focus:border-steam-accent"
             />
           </div>
 
@@ -260,7 +260,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-xs font-bold text-white">{game.name}</h4>
+                          <h4 className="text-xs font-bold text-steam-text">{game.name}</h4>
                           {isFree && (
                             <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/50 font-semibold">
                               Free to Play
@@ -320,7 +320,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
                         href={game.storeUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="p-1.5 rounded bg-steam-card hover:bg-steam-cardHover text-steam-muted hover:text-white border border-steam-border/40"
+                        className="p-1.5 rounded bg-steam-card hover:bg-steam-cardHover text-steam-muted hover:text-steam-text border border-steam-border/40"
                         title="View on Steam Store"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
@@ -354,7 +354,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
               ownershipTier === 'ready'
                 ? 'bg-steam-green text-steam-darkest shadow-glow-green'
-                : 'text-steam-muted hover:text-white hover:bg-steam-card/40'
+                : 'text-steam-muted hover:text-steam-text hover:bg-steam-card/40'
             }`}
           >
             {activePlayerCount > 0 ? `${activePlayerCount}/${activePlayerCount}` : 'All'} Ready ({games.length})
@@ -364,7 +364,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
               ownershipTier === 'missing'
                 ? 'bg-amber-400 text-steam-darkest shadow-md'
-                : 'text-steam-muted hover:text-white hover:bg-steam-card/40'
+                : 'text-steam-muted hover:text-steam-text hover:bg-steam-card/40'
             }`}
           >
             Almost There (1–2 Missing) ({nearOverlapGames.length})
@@ -375,7 +375,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
               className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
                 ownershipTier === 'half'
                   ? 'bg-sky-400 text-steam-darkest shadow-md'
-                  : 'text-steam-muted hover:text-white hover:bg-steam-card/40'
+                  : 'text-steam-muted hover:text-steam-text hover:bg-steam-card/40'
               }`}
             >
               Partial Overlap ({twoPlayerGames.length})
@@ -386,7 +386,7 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
             className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
               ownershipTier === 'all'
                 ? 'bg-purple-400 text-steam-darkest shadow-md'
-                : 'text-steam-muted hover:text-white hover:bg-steam-card/40'
+                : 'text-steam-muted hover:text-steam-text hover:bg-steam-card/40'
             }`}
           >
             All Squad Games ({allSquadGames.length})
@@ -417,9 +417,9 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
               onChange={(e) => setSortBy(e.target.value as any)}
               className="bg-transparent text-xs text-steam-text focus:outline-none cursor-pointer font-medium"
             >
-              <option value="playtime_desc" className="bg-steam-darkest text-white">Highest Squad Playtime</option>
-              <option value="playtime_asc" className="bg-steam-darkest text-white">Lowest Squad Playtime</option>
-              <option value="name_asc" className="bg-steam-darkest text-white">Name (A-Z)</option>
+              <option value="playtime_desc" className="bg-steam-card text-steam-text">Highest Squad Playtime</option>
+              <option value="playtime_asc" className="bg-steam-card text-steam-text">Lowest Squad Playtime</option>
+              <option value="name_asc" className="bg-steam-card text-steam-text">Name (A-Z)</option>
             </select>
           </div>
         </div>
@@ -433,12 +433,12 @@ export const ReadyToPlayTab: React.FC<ReadyToPlayTabProps> = ({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder={`Search games in ${ownershipTier === 'ready' ? 'Ready to Play' : ownershipTier === 'missing' ? 'One Missing' : ownershipTier === 'half' ? 'Half Squad' : 'All Squad Games'}...`}
-          className="w-full bg-steam-card border border-steam-border/60 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-steam-muted focus:outline-none focus:border-steam-accent transition-colors shadow-inner"
+          className="w-full bg-steam-card border border-steam-border/60 rounded-xl pl-10 pr-4 py-2.5 text-xs text-steam-text placeholder-steam-muted focus:outline-none focus:border-steam-accent transition-colors shadow-inner"
         />
         {searchQuery && (
           <button
             onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-2.5 text-xs text-steam-muted hover:text-white"
+            className="absolute right-3 top-2.5 text-xs text-steam-muted hover:text-steam-text"
           >
             ✕
           </button>

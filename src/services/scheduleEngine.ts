@@ -1,38 +1,121 @@
-import { GameNightEvent, HourlyOverlapSlot, PlayerAvailability, SteamUserSlot } from '../types/steam';
+import { BlockOverlapSlot, GameNightEvent, PlayerAvailability, ScheduleBlockInfo, SteamUserSlot } from '../types/steam';
 
 export const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export function formatHourLabel(hour: number): string {
-  if (hour === 0) return '12:00 AM';
-  if (hour === 12) return '12:00 PM';
-  if (hour > 12) return `${hour - 12}:00 PM`;
-  return `${hour}:00 AM`;
+export const SCHEDULE_BLOCKS: ScheduleBlockInfo[] = [
+  { id: 'daybreak', label: 'Daybreak', timeRange: '4:00 AM - 8:00 AM', startHour: 4, endHour: 8 },
+  { id: 'morning', label: 'Morning', timeRange: '8:00 AM - 12:00 PM', startHour: 8, endHour: 12 },
+  { id: 'afternoon', label: 'Afternoon', timeRange: '12:00 PM - 4:00 PM', startHour: 12, endHour: 16 },
+  { id: 'evening', label: 'Evening', timeRange: '4:00 PM - 8:00 PM', startHour: 16, endHour: 20 },
+  { id: 'night', label: 'Night', timeRange: '8:00 PM - 12:00 AM', startHour: 20, endHour: 24 },
+  { id: 'graveyard', label: 'Graveyard', timeRange: '12:00 AM - 4:00 AM', startHour: 0, endHour: 4 },
+];
+
+export function getStartOfWeek(refDate: Date = new Date()): Date {
+  const d = new Date(refDate);
+  const day = d.getDay(); // 0 = Sun, 1 = Mon ...
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const start = new Date(d.setDate(diff));
+  start.setHours(0, 0, 0, 0);
+  return start;
 }
 
-export function computeScheduleOverlap(
+export function getWeekDates(refDate: Date = new Date()): Date[] {
+  const start = getStartOfWeek(refDate);
+  const dates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    dates.push(d);
+  }
+  return dates;
+}
+
+export function getMonthDates(year: number, monthIndex: number): Date[] {
+  const dates: Date[] = [];
+  const count = new Date(year, monthIndex + 1, 0).getDate();
+  for (let i = 1; i <= count; i++) {
+    dates.push(new Date(year, monthIndex, i));
+  }
+  return dates;
+}
+
+export function getMonthCalendarGrid(year: number, monthIndex: number): {
+  daysInMonth: Date[];
+  paddingBefore: number;
+  paddingAfter: number;
+} {
+  const daysInMonth = getMonthDates(year, monthIndex);
+  const firstDay = new Date(year, monthIndex, 1);
+  const paddingBefore = (firstDay.getDay() + 6) % 7;
+  const totalCells = Math.ceil((paddingBefore + daysInMonth.length) / 7) * 7;
+  const paddingAfter = totalCells - (paddingBefore + daysInMonth.length);
+
+  return { daysInMonth, paddingBefore, paddingAfter };
+}
+
+export function parseLocalDateStr(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+export function getDayNameFromDateStr(dateStr: string): string {
+  const dateObj = parseLocalDateStr(dateStr);
+  const dayIdx = (dateObj.getDay() + 6) % 7;
+  return DAYS_OF_WEEK[dayIdx];
+}
+
+export function formatDateStr(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatDateLabel(date: Date): string {
+  const dayName = DAYS_OF_WEEK[(date.getDay() + 6) % 7];
+  const month = date.getMonth() + 1;
+  const dayNum = date.getDate();
+  return `${dayName} ${month}/${dayNum}`;
+}
+
+export function computeBlockScheduleOverlap(
   schedules: Record<string, PlayerAvailability>,
-  activeSlots: SteamUserSlot[]
-): HourlyOverlapSlot[][] {
+  activeSlots: SteamUserSlot[],
+  weekDates: Date[]
+): BlockOverlapSlot[][] {
   const validSlots = activeSlots.filter(s => s.input.trim().length > 0 || s.personaName);
   const activeCount = validSlots.length;
 
-  // Build 7 x 24 grid
-  const matrix: HourlyOverlapSlot[][] = [];
+  const matrix: BlockOverlapSlot[][] = [];
 
-  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-    const dayName = DAYS_OF_WEEK[dayIndex];
-    const dayRow: HourlyOverlapSlot[] = [];
+  for (let dayIdx = 0; dayIdx < weekDates.length; dayIdx++) {
+    const dateObj = weekDates[dayIdx];
+    const dateStr = formatDateStr(dateObj);
+    const dayName = DAYS_OF_WEEK[(dateObj.getDay() + 6) % 7];
+    const dayFormatted = formatDateLabel(dateObj);
+    const dayRow: BlockOverlapSlot[] = [];
 
-    for (let hour = 0; hour < 24; hour++) {
-      const slotKey = `${dayName}-${hour}`;
+    for (const block of SCHEDULE_BLOCKS) {
+      const dateKey = `${dateStr}-${block.id}`;
+      const dayKey = `${dayName}-${block.id}`;
+
       const availableSteamIds: string[] = [];
       const availableNames: string[] = [];
       const missingNames: string[] = [];
 
-      validSlots.forEach(slot => {
-        const pSched = schedules[slot.id] || schedules[slot.steamId || ''];
+      validSlots.forEach((slot, idx) => {
+        const pSched =
+          schedules[slot.id] ||
+          (slot.steamId && schedules[slot.steamId]) ||
+          (slot.personaName && schedules[slot.personaName]) ||
+          schedules[`${idx + 1}`] ||
+          schedules[`slot-${idx + 1}`];
+
         const name = slot.personaName || slot.input || `Player ${slot.id}`;
-        if (pSched && pSched.grid && pSched.grid[slotKey]) {
+        
+        const isAvailable = pSched && pSched.grid && (pSched.grid[dateKey] || pSched.grid[dayKey]);
+        if (isAvailable) {
           availableSteamIds.push(slot.id);
           availableNames.push(name);
         } else {
@@ -45,10 +128,12 @@ export function computeScheduleOverlap(
       const isFullSquad = activeCount > 0 && count === activeCount;
 
       dayRow.push({
-        day: dayIndex,
+        dateStr,
         dayName,
-        hour,
-        timeLabel: formatHourLabel(hour),
+        dayFormatted,
+        blockId: block.id,
+        blockLabel: block.label,
+        timeRange: block.timeRange,
         availableSteamIds,
         availableNames,
         missingNames,
@@ -64,13 +149,11 @@ export function computeScheduleOverlap(
   return matrix;
 }
 
-export interface RecommendedWindow {
-  dayName: string;
-  startHour: number;
-  endHour: number;
-  startLabel: string;
-  endLabel: string;
-  durationHours: number;
+export interface RecommendedBlockWindow {
+  dateStr: string;
+  dayFormatted: string;
+  blockLabel: string;
+  timeRange: string;
   availableNames: string[];
   missingNames: string[];
   count: number;
@@ -78,95 +161,30 @@ export interface RecommendedWindow {
   isFullSquad: boolean;
 }
 
-export function findBestSquadWindows(matrix: HourlyOverlapSlot[][]): RecommendedWindow[] {
-  const windows: RecommendedWindow[] = [];
+export function findBestSquadBlockWindows(matrix: BlockOverlapSlot[][]): RecommendedBlockWindow[] {
+  const windows: RecommendedBlockWindow[] = [];
 
-  for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
-    const dayRow = matrix[dayIndex];
-    let currentStart: number | null = null;
-    let currentCount = 0;
-    let currentAvailable: string[] = [];
-    let currentMissing: string[] = [];
-
-    for (let hour = 0; hour < 24; hour++) {
-      const slot = dayRow[hour];
-
-      // Consider window active if at least 50% or 2+ players free
+  for (const dayRow of matrix) {
+    for (const slot of dayRow) {
       if (slot.count >= 2) {
-        if (currentStart === null) {
-          currentStart = hour;
-          currentCount = slot.count;
-          currentAvailable = slot.availableNames;
-          currentMissing = slot.missingNames;
-        } else if (slot.count !== currentCount) {
-          // Finish previous block and start new block
-          const duration = hour - currentStart;
-          if (duration >= 1) {
-            windows.push({
-              dayName: DAYS_OF_WEEK[dayIndex],
-              startHour: currentStart,
-              endHour: hour,
-              startLabel: formatHourLabel(currentStart),
-              endLabel: formatHourLabel(hour),
-              durationHours: duration,
-              availableNames: currentAvailable,
-              missingNames: currentMissing,
-              count: currentCount,
-              percentage: Math.round((currentCount / Math.max(1, currentAvailable.length + currentMissing.length)) * 100),
-              isFullSquad: currentMissing.length === 0,
-            });
-          }
-          currentStart = hour;
-          currentCount = slot.count;
-          currentAvailable = slot.availableNames;
-          currentMissing = slot.missingNames;
-        }
-      } else {
-        if (currentStart !== null) {
-          const duration = hour - currentStart;
-          if (duration >= 1) {
-            windows.push({
-              dayName: DAYS_OF_WEEK[dayIndex],
-              startHour: currentStart,
-              endHour: hour,
-              startLabel: formatHourLabel(currentStart),
-              endLabel: formatHourLabel(hour),
-              durationHours: duration,
-              availableNames: currentAvailable,
-              missingNames: currentMissing,
-              count: currentCount,
-              percentage: Math.round((currentCount / Math.max(1, currentAvailable.length + currentMissing.length)) * 100),
-              isFullSquad: currentMissing.length === 0,
-            });
-          }
-          currentStart = null;
-        }
+        windows.push({
+          dateStr: slot.dateStr,
+          dayFormatted: slot.dayFormatted,
+          blockLabel: slot.blockLabel,
+          timeRange: slot.timeRange,
+          availableNames: slot.availableNames,
+          missingNames: slot.missingNames,
+          count: slot.count,
+          percentage: slot.percentage,
+          isFullSquad: slot.isFullSquad,
+        });
       }
-    }
-
-    if (currentStart !== null) {
-      const duration = 24 - currentStart;
-      windows.push({
-        dayName: DAYS_OF_WEEK[dayIndex],
-        startHour: currentStart,
-        endHour: 24,
-        startLabel: formatHourLabel(currentStart),
-        endLabel: '12:00 AM (Next Day)',
-        durationHours: duration,
-        availableNames: currentAvailable,
-        missingNames: currentMissing,
-        count: currentCount,
-        percentage: Math.round((currentCount / Math.max(1, currentAvailable.length + currentMissing.length)) * 100),
-        isFullSquad: currentMissing.length === 0,
-      });
     }
   }
 
-  // Sort by full squad status first, then highest percentage, then longest duration
   return windows.sort((a, b) => {
     if (a.isFullSquad !== b.isFullSquad) return a.isFullSquad ? -1 : 1;
-    if (a.count !== b.count) return b.count - a.count;
-    return b.durationHours - a.durationHours;
+    return b.count - a.count;
   });
 }
 
@@ -209,4 +227,16 @@ export function generateIcsPayload(event: {
 export function generateDiscordInviteText(event: GameNightEvent): string {
   const attendees = event.attendingNames.length > 0 ? event.attendingNames.join(', ') : 'Squad Members';
   return `🎮 **STEAM SQUAD GAME NIGHT** 🎮\n\n📌 **Game:** ${event.gameName}\n📅 **When:** ${event.dayName} (${event.startTimeLabel} - ${event.endTimeLabel})\n👥 **Attending:** ${attendees}\n\n*Synced via Steam Squad Sync*`;
+}
+
+export function exportSquadSchedulesToJson(schedules: Record<string, PlayerAvailability>): string {
+  return JSON.stringify(schedules, null, 2);
+}
+
+export function parseSquadSchedulesFromJson(jsonStr: string): Record<string, PlayerAvailability> {
+  const parsed = JSON.parse(jsonStr);
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Invalid schedule format');
+  }
+  return parsed;
 }

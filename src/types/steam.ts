@@ -160,24 +160,38 @@ export interface UpcomingRecommendation extends ExternalRecommendation {
 
 export type ActiveTab = 'ready' | 'missing' | 'wishlist' | 'recommendations' | 'schedule' | 'hidden';
 
+export type AppTheme = 'dark' | 'light' | 'toast' | 'reysol';
+
+export type ScheduleBlockId = 'daybreak' | 'morning' | 'afternoon' | 'evening' | 'night' | 'graveyard';
+
+export interface ScheduleBlockInfo {
+  id: ScheduleBlockId;
+  label: string;
+  timeRange: string;
+  startHour: number;
+  endHour: number;
+}
+
 export interface PlayerAvailability {
   slotId: string;
   personaName?: string;
-  timezone: string; // e.g. "America/New_York", "America/Los_Angeles", "UTC"
-  // Map of "Day-Hour" e.g. "Mon-20" -> boolean (true = free/available)
+  timezone: string;
+  // Map of "YYYY-MM-DD-blockId" or "Day-blockId" -> boolean
   grid: Record<string, boolean>;
 }
 
-export interface HourlyOverlapSlot {
-  day: number; // 0 = Mon, 6 = Sun
-  dayName: string; // "Mon", "Tue", etc.
-  hour: number; // 0 to 23
-  timeLabel: string; // "8:00 PM"
-  availableSteamIds: string[]; // List of slotIds/SteamIDs free at this hour
-  availableNames: string[]; // Persona names of available players
-  missingNames: string[]; // Persona names of missing players
-  count: number; // Total available players count
-  percentage: number; // 0 to 100%
+export interface BlockOverlapSlot {
+  dateStr: string; // "2026-09-21"
+  dayName: string; // "Mon"
+  dayFormatted: string; // "Mon Sep 21"
+  blockId: ScheduleBlockId;
+  blockLabel: string;
+  timeRange: string;
+  availableSteamIds: string[];
+  availableNames: string[];
+  missingNames: string[];
+  count: number;
+  percentage: number;
   isFullSquad: boolean;
 }
 

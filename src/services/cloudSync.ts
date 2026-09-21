@@ -17,29 +17,19 @@ export function generateDeterministicSquadKey(slots: { steamId?: string }[]): st
     return '';
   }
 
-  // Default 4 players map to 9821
-  const defaultIds = [
-    '76561198003985811',
-    '76561198034659844',
-    '76561198043877417',
-    '76561198864094111',
-  ].sort();
-
-  if (
-    validIds.length === defaultIds.length &&
-    validIds.every((id, idx) => id === defaultIds[idx])
-  ) {
-    return '9821';
-  }
-
   const combined = validIds.join('|');
-  let hash = 5381;
+  let h1 = 5381;
+  let h2 = 0;
   for (let i = 0; i < combined.length; i++) {
-    hash = (hash * 33) ^ combined.charCodeAt(i);
+    const char = combined.charCodeAt(i);
+    h1 = (h1 * 33) ^ char;
+    h2 = char + (h2 << 6) + (h2 << 16) - h2;
   }
-  const positiveHash = (hash >>> 0);
-  const codeNum = (positiveHash % 900000) + 100000;
-  return `${codeNum}`;
+
+  const p1 = (h1 >>> 0).toString(36).toUpperCase();
+  const p2 = (h2 >>> 0).toString(36).toUpperCase();
+  const raw = (p1 + p2 + '00000000').slice(0, 8);
+  return raw;
 }
 
 // Category Enum Mapping for Micro Cloud Payload Size

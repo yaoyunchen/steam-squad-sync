@@ -29,8 +29,8 @@ function decryptSecret(value: string): string {
   }
 }
 
-const DEFAULT_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || '';
-const DEFAULT_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+const DEFAULT_SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL || 'https://cjuffkahiadbrwycylpm.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqdWZma2FoaWFkYnJ3eWN5bHBtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMjAzNjQsImV4cCI6MjEwNTU5NjM2NH0.i98ic43sNz4sSFjrDc_pZkh5KkJwAw6mFaSO33zazvA';
 
 export const StorageService = {
   // --- Steam API Key ---
@@ -379,9 +379,11 @@ export const StorageService = {
   // --- Supabase Cloud Sync Config ---
   getSupabaseConfig(): { url: string; anonKey: string; roomCode: string } {
     try {
-      const url = localStorage.getItem('steam_squad_supabase_url') || DEFAULT_SUPABASE_URL;
+      const storedUrl = (localStorage.getItem('steam_squad_supabase_url') || '').trim();
+      const url = storedUrl || DEFAULT_SUPABASE_URL;
       const rawKey = localStorage.getItem('steam_squad_supabase_key') || '';
-      const anonKey = rawKey ? decryptSecret(rawKey) : DEFAULT_SUPABASE_ANON_KEY;
+      const decryptedKey = rawKey ? decryptSecret(rawKey).trim() : '';
+      const anonKey = decryptedKey || DEFAULT_SUPABASE_ANON_KEY;
       const roomCode = localStorage.getItem('steam_squad_room_code') || '';
       return { url, anonKey, roomCode };
     } catch {

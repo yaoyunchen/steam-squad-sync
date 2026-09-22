@@ -1,5 +1,6 @@
 import { PlayerAvailability, SquadGameAnalysis } from '../types/steam';
 import { parseSteamInput } from './steamApi';
+import { getDayNameFromDateStr } from './scheduleEngine';
 
 /**
  * Deterministically generates a unique Squad Room Key based on active player SteamIDs.
@@ -140,7 +141,9 @@ export function sanitizeSlotsForCloud(slots: any[]): CompactCloudSlot[] {
 
 /**
  * Clean and compact schedule grids before uploading to cloud/Supabase.
- * Drops false availability keys to reduce payload size by up to 80%.
+ * - Retains recurring day keys (e.g. "Mon-night": true).
+ * - Strips redundant date keys (e.g. "2026-09-21-night": true) if "Mon-night": true is set.
+ * - Retains explicit date overrides/exceptions (e.g. "2026-09-23-evening": false) when overriding recurring defaults.
  */
 export function sanitizeSchedulesForCloud(
   schedules: Record<string, PlayerAvailability>
@@ -151,9 +154,36 @@ export function sanitizeSchedulesForCloud(
     const compactGrid: Record<string, boolean> = {};
 
     if (player.grid) {
-      Object.entries(player.grid).forEach(([key, value]) => {
-        if (value === true) {
+      // 1. First pass: Collect all recurring day-of-week keys that are true (e.g., "Mon-night": true)
+      const recurringTrueKeys = new Set<string>();
+      Object.entries(player.grid).forEach(([key, val]) => {
+        if (val === true && /^[A-Z][a-z]{2}-[a-z]+$/.test(key)) {
+          recurringTrueKeys.add(key);
           compactGrid[key] = true;
+        }
+      });
+
+      // 2. Second pass: Process date-based keys (e.g., "2026-09-21-night")
+      Object.entries(player.grid).forEach(([key, val]) => {
+        const dateMatch = key.match(/^(\d{4}-\d{2}-\d{2})-(.+)$/);
+        if (dateMatch) {
+          const dateStr = dateMatch[1];
+          const blockId = dateMatch[2];
+          const dayName = getDayNameFromDateStr(dateStr);
+          const recurringKey = `${dayName}-${blockId}`;
+          const isRecurringFree = recurringTrueKeys.has(recurringKey);
+
+          if (val === true) {
+            // Only store date key if recurring default is NOT free
+            if (!isRecurringFree) {
+              compactGrid[key] = true;
+            }
+          } else if (val === false) {
+            // Store explicit override if recurring default IS free (user marked busy for specific date)
+            if (isRecurringFree) {
+              compactGrid[key] = false;
+            }
+          }
         }
       });
     }

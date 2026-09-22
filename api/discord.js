@@ -97,6 +97,24 @@ function formatDateLabel(dateStr) {
   return `${dayName} ${month}/${dayNum}`;
 }
 
+function getDayNameFromDateStr(dateStr) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return days[d.getDay()];
+}
+
+function isSlotAvailableOnDate(pSched, dateStr, blockId) {
+  if (!pSched || !pSched.grid) return false;
+  const dateKey = `${dateStr}-${blockId}`;
+  if (pSched.grid[dateKey] !== undefined) {
+    return !!pSched.grid[dateKey];
+  }
+  const dayName = getDayNameFromDateStr(dateStr);
+  const dayKey = `${dayName}-${blockId}`;
+  return !!pSched.grid[dayKey];
+}
+
 // Fetch Supabase squad payload
 async function fetchCloudPayload(roomCode) {
   const cleanUrl = SUPABASE_URL.replace(/\/$/, '');
@@ -267,8 +285,7 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
 
     const activeBlocks = [];
     BLOCKS_CONFIG.forEach((block) => {
-      const key = `${activeDateStr}-${block.id}`;
-      if (pSched?.grid && pSched.grid[key]) {
+      if (isSlotAvailableOnDate(pSched, activeDateStr, block.id)) {
         activeBlocks.push(block.short);
       }
     });
@@ -302,7 +319,7 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
 
       const activeBlocks = [];
       BLOCKS_CONFIG.forEach((block) => {
-        if (pSched?.grid && pSched.grid[`${dStr}-${block.id}`]) {
+        if (isSlotAvailableOnDate(pSched, dStr, block.id)) {
           activeBlocks.push(block.short.split(' ')[0]);
         }
       });

@@ -113,13 +113,20 @@ export function computeBlockScheduleOverlap(
           schedules[`slot-${cleanSlotNum}`] ||
           schedules[cleanSlotNum] ||
           schedules[`slot-${idx + 1}`] ||
-          schedules[`${idx + 1}`] ||
           Object.values(schedules).find(p => p.personaName && slot.personaName && p.personaName.trim().toLowerCase() === slot.personaName.trim().toLowerCase()) ||
           Object.values(schedules).find(p => p.slotId === slot.id || (slot.steamId && p.slotId === slot.steamId));
 
         const name = slot.personaName || slot.input || `Player ${slot.id}`;
-        
-        const isAvailable = pSched && pSched.grid && (pSched.grid[dateKey] || pSched.grid[dayKey]);
+
+        let isAvailable = false;
+        if (pSched && pSched.grid) {
+          if (pSched.grid[dateKey] !== undefined) {
+            isAvailable = !!pSched.grid[dateKey];
+          } else {
+            isAvailable = !!pSched.grid[dayKey];
+          }
+        }
+
         if (isAvailable) {
           availableSteamIds.push(slot.id);
           availableNames.push(name);

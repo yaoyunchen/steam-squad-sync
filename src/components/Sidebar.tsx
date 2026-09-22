@@ -39,6 +39,8 @@ interface SidebarProps {
   isSyncing: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -59,6 +61,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isSyncing,
   collapsed,
   onToggleCollapse,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -72,53 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const validSlotsCount = slots.filter(s => s.steamId && !s.isPrivate).length;
 
-  if (collapsed) {
-    return (
-      <div className="w-14 h-full bg-steam-darker border-r border-steam-border/40 flex flex-col items-center py-4 justify-between transition-all duration-300">
-        <div className="flex flex-col items-center gap-4">
-          <button
-            onClick={onToggleCollapse}
-            className="p-2 rounded-lg bg-steam-card hover:bg-steam-cardHover text-steam-accent transition-colors"
-            title="Expand Sidebar"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
-
-          <div className="w-8 h-[1px] bg-steam-border/50" />
-
-          {/* Slots mini icons */}
-          <div className="flex flex-col items-center gap-2 max-h-[calc(100vh-220px)] overflow-y-auto px-1 py-1">
-            {slots.map((slot, index) => (
-              <div key={slot.id} className="relative group">
-                <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-steam-border bg-steam-card flex items-center justify-center">
-                  {slot.avatarUrl ? (
-                    <img src={slot.avatarUrl} alt={slot.personaName || `Slot ${index + 1}`} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[10px] font-semibold text-steam-muted">#{index + 1}</span>
-                  )}
-                </div>
-                {slot.steamId && (
-                  <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-steam-darkest ${slot.isPrivate ? 'bg-amber-500' : 'bg-steam-green'}`} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={onSyncSquad}
-          disabled={isSyncing}
-          className="w-10 h-10 rounded-full bg-steam-accent hover:bg-steam-accentHover text-steam-darkest flex items-center justify-center shadow-glow-accent transition-all"
-          title="Sync Squad Libraries"
-        >
-          <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <aside className="w-80 h-full bg-steam-darker border-r border-steam-border/40 flex flex-col justify-between transition-all duration-300 overflow-y-auto">
+  const sidebarContent = (
+    <div className="w-full h-full flex flex-col justify-between overflow-y-auto">
       <div className="p-4 space-y-4">
         {/* Header & Collapse Toggle */}
         <div className="flex items-center justify-between">
@@ -128,13 +87,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Squad Configuration
             </h2>
           </div>
-          <button
-            onClick={onToggleCollapse}
-            className="p-1 rounded hover:bg-steam-card text-steam-muted hover:text-steam-text transition-colors"
-            title="Collapse Sidebar"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {onCloseMobile && (
+              <button
+                onClick={onCloseMobile}
+                className="p-1 rounded hover:bg-steam-card text-steam-muted hover:text-steam-text transition-colors md:hidden"
+                title="Close Mobile Menu"
+              >
+                <X className="w-5 h-5 text-rose-400" />
+              </button>
+            )}
+            <button
+              onClick={onToggleCollapse}
+              className="p-1 rounded hover:bg-steam-card text-steam-muted hover:text-steam-text transition-colors hidden md:block"
+              title="Collapse Sidebar"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Valve Web API Key Input */}
@@ -393,6 +363,74 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Mobile Drawer Backdrop Overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 md:hidden"
+          onClick={onCloseMobile}
+        />
+      )}
+
+      {/* Mobile Slide-Over Drawer */}
+      {isMobileOpen && (
+        <aside className="fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] bg-steam-darker border-r border-steam-border/60 shadow-2xl flex flex-col md:hidden">
+          {sidebarContent}
+        </aside>
+      )}
+
+      {/* Desktop Sidebar (Collapsed or Expanded) */}
+      <aside
+        className={`hidden md:flex flex-col justify-between h-full bg-steam-darker border-r border-steam-border/40 transition-all duration-300 ${
+          collapsed ? 'w-14' : 'w-80'
+        }`}
+      >
+        {collapsed ? (
+          <div className="w-14 h-full bg-steam-darker flex flex-col items-center py-4 justify-between transition-all duration-300">
+            <div className="flex flex-col items-center gap-4">
+              <button
+                onClick={onToggleCollapse}
+                className="p-2 rounded-lg bg-steam-card hover:bg-steam-cardHover text-steam-accent transition-colors"
+                title="Expand Sidebar"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+
+              <div className="w-8 h-[1px] bg-steam-border/50" />
+
+              {/* Slots mini icons */}
+              <div className="flex flex-col items-center gap-2 max-h-[calc(100vh-220px)] overflow-y-auto px-1 py-1">
+                {slots.map((slot, index) => (
+                  <div key={slot.id} className="relative group">
+                    <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-steam-border bg-steam-card flex items-center justify-center">
+                      {slot.avatarUrl ? (
+                        <img src={slot.avatarUrl} alt={slot.personaName || `Slot ${index + 1}`} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[10px] font-semibold text-steam-muted">#{index + 1}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={onSyncSquad}
+              disabled={isSyncing}
+              className="w-10 h-10 rounded-full bg-steam-accent hover:bg-steam-accentHover text-steam-darkest flex items-center justify-center shadow-glow-accent transition-all"
+              title="Sync Squad Libraries"
+            >
+              <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        ) : (
+          sidebarContent
+        )}
+      </aside>
+    </>
   );
 };

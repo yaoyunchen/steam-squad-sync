@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Heart,
   EyeOff,
+  Menu,
   Calendar as CalendarIcon
 } from 'lucide-react';
 import { 
@@ -64,6 +65,7 @@ export const App: React.FC = () => {
     StorageService.setActiveTab(tab);
   };
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [libraries, setLibraries] = useState<Record<string, CachedLibrary>>({});
   const [isSyncing, setIsSyncing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'info' | 'error' | 'success'; text: string } | null>(null);
@@ -626,7 +628,7 @@ export const App: React.FC = () => {
 
       {/* Main Workspace Layout */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Collapsible Left Sidebar */}
+        {/* Collapsible Left Sidebar & Mobile Drawer */}
         <Sidebar
           apiKey={apiKey}
           onApiKeyChange={handleApiKeyChange}
@@ -645,10 +647,37 @@ export const App: React.FC = () => {
           isSyncing={isSyncing}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         {/* Central Dashboard & Tab Panel */}
         <main className="flex-1 flex flex-col overflow-hidden bg-steam-darkest transition-colors duration-200">
+          {/* Mobile Navigation Header (<768px) */}
+          <div className="flex md:hidden items-center justify-between px-4 py-2 bg-steam-darker border-b border-steam-border/40 flex-shrink-0">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="p-2 rounded-lg bg-steam-card hover:bg-steam-cardHover text-steam-accent flex items-center gap-2 text-xs font-bold shadow"
+            >
+              <Menu className="w-4 h-4" />
+              <span>Squad Config</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-mono font-bold text-steam-accent bg-steam-accent/10 px-2.5 py-1 rounded border border-steam-accent/30">
+                #{roomCode}
+              </span>
+              <button
+                onClick={handleSyncSquad}
+                disabled={isSyncing}
+                className="p-1.5 rounded-lg bg-steam-accent text-steam-darkest text-xs font-bold flex items-center justify-center shadow"
+                title="Sync Squad"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
           {/* Status Alert Banner */}
           {statusMessage && (
             <div
@@ -680,8 +709,8 @@ export const App: React.FC = () => {
           )}
 
           {/* Navigation Bar & Tab Bar */}
-          <div className="border-b border-steam-border/40 px-6 pt-4 pb-0 bg-steam-darker/60 flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-2">
+          <div className="border-b border-steam-border/40 px-3 md:px-6 pt-2 md:pt-4 pb-0 bg-steam-darker/60 flex items-center justify-between gap-4 overflow-x-auto whitespace-nowrap flex-nowrap scrollbar-none">
+            <div className="flex items-center gap-1 md:gap-2 flex-nowrap">
               <button
                 onClick={() => setActiveTab('ready')}
                 className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 transition-all ${

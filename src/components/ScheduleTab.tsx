@@ -806,8 +806,8 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
               </div>
 
               {/* Matrix Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-x-auto touch-pan-x">
+                <table className="w-full min-w-[750px] text-left border-collapse">
                   <thead>
                     <tr className="border-b border-steam-border/60 text-xs text-steam-muted">
                       <th className="py-2.5 px-3 min-w-[140px]">4-Hour Time Block</th>
@@ -1122,8 +1122,8 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
           </div>
 
           {/* Editable Grid Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="overflow-x-auto touch-pan-x">
+            <table className="w-full min-w-[750px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-steam-border/60 text-xs text-steam-muted">
                   <th className="py-2.5 px-3 min-w-[140px]">Block</th>

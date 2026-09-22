@@ -143,6 +143,7 @@ export const App: React.FC = () => {
         const currentScheds = StorageService.getSquadSchedules();
         const mergedScheds = { ...currentScheds, ...payload.schedules };
         StorageService.saveSquadSchedules(mergedScheds);
+        window.dispatchEvent(new Event('steam_squad_schedules_updated'));
       }
 
       StorageService.setSupabaseConfig(url, anonKey, targetRoomCode);

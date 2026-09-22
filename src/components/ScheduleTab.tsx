@@ -71,13 +71,37 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
     return StorageService.getGameNightEvents();
   });
 
-  // Re-sync schedules and Supabase config from StorageService whenever slots change
+  // Re-sync schedules and Supabase config from StorageService whenever slots change or cloud room changes
   React.useEffect(() => {
     const config = StorageService.getSupabaseConfig();
     setSupabaseUrl(config.url);
     setSupabaseAnonKey(config.anonKey);
     setRoomCode(config.roomCode);
     setSchedules(StorageService.getSquadSchedules());
+
+    // Auto-pull schedules from Cloud if room connected
+    if (config.url && config.anonKey && config.roomCode) {
+      CloudSyncService.fetchSquadPayload(config.url, config.anonKey, config.roomCode)
+        .then((payload) => {
+          if (payload && payload.schedules) {
+            const current = StorageService.getSquadSchedules();
+            const merged = { ...current, ...payload.schedules };
+            setSchedules(merged);
+            StorageService.saveSquadSchedules(merged);
+          }
+        })
+        .catch((err) => {
+          console.warn('Auto cloud schedule pull notice:', err);
+        });
+    }
+
+    const handleStorageChange = () => {
+      setSchedules(StorageService.getSquadSchedules());
+    };
+    window.addEventListener('steam_squad_schedules_updated', handleStorageChange);
+    return () => {
+      window.removeEventListener('steam_squad_schedules_updated', handleStorageChange);
+    };
   }, [slots]);
 
   const [activeSlotId, setActiveSlotId] = useState<string>(activeSlots[0]?.id || 'slot-1');
@@ -172,6 +196,23 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
     const newSchedules = { ...schedules, [activeSlotId]: updatedPlayerSched };
     setSchedules(newSchedules);
     StorageService.savePlayerSchedule(activeSlotId, updatedPlayerSched);
+
+    // Auto-push updated schedule payload to Supabase Cloud in background
+    const config = StorageService.getSupabaseConfig();
+    if (config.url && config.anonKey && config.roomCode) {
+      const cleanedSchedules = sanitizeSchedulesForCloud(newSchedules);
+      const cleanedReady = sanitizeGamesForCloud(readyGames);
+      const cleanedNear = sanitizeGamesForCloud(nearOverlapGames);
+
+      CloudSyncService.pushSquadPayload(config.url, config.anonKey, config.roomCode, {
+        schedules: cleanedSchedules,
+        sharedGames: {
+          readyGames: cleanedReady,
+          nearOverlapGames: cleanedNear,
+          updatedAt: Date.now(),
+        },
+      }).catch(err => console.warn('Background cloud schedule push notice:', err));
+    }
   };
 
   // Single Click Cell Toggle (Guarded against past dates)

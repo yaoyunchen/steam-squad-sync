@@ -79,15 +79,21 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
     setRoomCode(config.roomCode);
     setSchedules(StorageService.getSquadSchedules());
 
-    // Auto-pull schedules from Cloud if room connected
+    // Auto-pull schedules & events from Cloud if room connected
     if (config.url && config.anonKey && config.roomCode) {
       CloudSyncService.fetchSquadPayload(config.url, config.anonKey, config.roomCode)
         .then((payload) => {
-          if (payload && payload.schedules) {
-            const current = StorageService.getSquadSchedules();
-            const merged = { ...current, ...payload.schedules };
-            setSchedules(merged);
-            StorageService.saveSquadSchedules(merged);
+          if (payload) {
+            if (payload.schedules) {
+              const current = StorageService.getSquadSchedules();
+              const merged = { ...current, ...payload.schedules };
+              setSchedules(merged);
+              StorageService.saveSquadSchedules(merged);
+            }
+            if (payload.events && Array.isArray(payload.events)) {
+              setEvents(payload.events);
+              StorageService.saveGameNightEvents(payload.events);
+            }
           }
         })
         .catch((err) => {
@@ -97,6 +103,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
 
     const handleStorageChange = () => {
       setSchedules(StorageService.getSquadSchedules());
+      setEvents(StorageService.getGameNightEvents());
     };
     window.addEventListener('steam_squad_schedules_updated', handleStorageChange);
     return () => {
@@ -206,6 +213,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
 
       CloudSyncService.pushSquadPayload(config.url, config.anonKey, config.roomCode, {
         schedules: cleanedSchedules,
+        events: events,
         sharedGames: {
           readyGames: cleanedReady,
           nearOverlapGames: cleanedNear,
@@ -460,6 +468,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
 
       const payload = {
         schedules: cleanedSchedules,
+        events: events,
         sharedGames: {
           readyGames: cleanedReady,
           nearOverlapGames: cleanedNear,
@@ -496,6 +505,11 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
         const merged = { ...schedules, ...payload.schedules };
         setSchedules(merged);
         StorageService.saveSquadSchedules(merged);
+      }
+
+      if (payload.events && Array.isArray(payload.events)) {
+        setEvents(payload.events);
+        StorageService.saveGameNightEvents(payload.events);
       }
 
       showToast(`Loaded payload for ${roomCode.toUpperCase()}! Saved Steam API queries.`);

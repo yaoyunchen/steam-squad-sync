@@ -105,12 +105,17 @@ export function computeBlockScheduleOverlap(
       const missingNames: string[] = [];
 
       validSlots.forEach((slot, idx) => {
+        const cleanSlotNum = slot.id.replace(/^slot-/, '');
         const pSched =
           schedules[slot.id] ||
           (slot.steamId && schedules[slot.steamId]) ||
           (slot.personaName && schedules[slot.personaName]) ||
+          schedules[`slot-${cleanSlotNum}`] ||
+          schedules[cleanSlotNum] ||
+          schedules[`slot-${idx + 1}`] ||
           schedules[`${idx + 1}`] ||
-          schedules[`slot-${idx + 1}`];
+          Object.values(schedules).find(p => p.personaName && slot.personaName && p.personaName.trim().toLowerCase() === slot.personaName.trim().toLowerCase()) ||
+          Object.values(schedules).find(p => p.slotId === slot.id || (slot.steamId && p.slotId === slot.steamId));
 
         const name = slot.personaName || slot.input || `Player ${slot.id}`;
         

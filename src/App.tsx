@@ -54,7 +54,15 @@ export const App: React.FC = () => {
     }
     return DEFAULT_SLOTS;
   });
-  const [activeTab, setActiveTab] = useState<ActiveTab>('ready');
+  const [activeTab, setActiveTabState] = useState<ActiveTab>(() => {
+    const saved = StorageService.getActiveTab() as ActiveTab;
+    return saved || 'ready';
+  });
+
+  const setActiveTab = (tab: ActiveTab) => {
+    setActiveTabState(tab);
+    StorageService.setActiveTab(tab);
+  };
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [libraries, setLibraries] = useState<Record<string, CachedLibrary>>({});
   const [isSyncing, setIsSyncing] = useState(false);
@@ -143,8 +151,13 @@ export const App: React.FC = () => {
         const currentScheds = StorageService.getSquadSchedules();
         const mergedScheds = { ...currentScheds, ...payload.schedules };
         StorageService.saveSquadSchedules(mergedScheds);
-        window.dispatchEvent(new Event('steam_squad_schedules_updated'));
       }
+
+      if (payload.events && Array.isArray(payload.events)) {
+        StorageService.saveGameNightEvents(payload.events);
+      }
+
+      window.dispatchEvent(new Event('steam_squad_schedules_updated'));
 
       StorageService.setSupabaseConfig(url, anonKey, targetRoomCode);
       setRoomCode(targetRoomCode);

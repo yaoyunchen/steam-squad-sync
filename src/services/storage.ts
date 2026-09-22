@@ -404,4 +404,21 @@ export const StorageService = {
       console.warn('Failed to save Supabase config:', e);
     }
   },
+
+  // --- Active Tab State Persistence ---
+  getActiveTab(): string {
+    try {
+      return localStorage.getItem('steam_squad_active_tab') || 'ready';
+    } catch {
+      return 'ready';
+    }
+  },
+
+  setActiveTab(tab: string): void {
+    try {
+      localStorage.setItem('steam_squad_active_tab', tab);
+    } catch (e) {
+      console.warn('Failed to save active tab:', e);
+    }
+  },
 };

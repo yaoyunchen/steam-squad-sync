@@ -112,6 +112,7 @@ export interface CleanedCloudPayload {
     timezone: string;
     grid: Record<string, boolean>;
   }>;
+  events?: any[];
   sharedGames?: {
     readyGames: any[];
     nearOverlapGames: any[];

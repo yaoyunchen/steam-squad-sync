@@ -211,35 +211,37 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
   let playersToDisplay = [];
   const seenNames = new Set();
 
-  // 1. Add all slots from payload.slots
-  slots.forEach((s) => {
-    const name = s.personaName || s.input || `Player ${s.id}`;
-    const lower = name.toLowerCase();
-    if (!seenNames.has(lower)) {
-      seenNames.add(lower);
-      playersToDisplay.push({
-        key: s.steamId || s.id,
-        name,
-        steamId: s.steamId,
-        slotId: s.id,
-      });
-    }
-  });
-
-  // 2. Also add any additional entries from payload.schedules
-  Object.entries(schedules).forEach(([key, player]) => {
-    const name = player.personaName || key;
-    const lower = name.toLowerCase();
-    if (!seenNames.has(lower)) {
-      seenNames.add(lower);
-      playersToDisplay.push({
-        key,
-        name,
-        steamId: key,
-        slotId: player.slotId || key,
-      });
-    }
-  });
+  if (slots.length > 0) {
+    // 1. Rely strictly on defined squad slots from payload.slots
+    slots.forEach((s, idx) => {
+      const name = s.personaName || s.input || `Player #${s.id || idx + 1}`;
+      const lower = name.toLowerCase();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        playersToDisplay.push({
+          key: s.steamId || s.id || `${idx + 1}`,
+          name,
+          steamId: s.steamId,
+          slotId: s.id || `${idx + 1}`,
+        });
+      }
+    });
+  } else {
+    // 2. Fallback to schedules if no slots array exists
+    Object.entries(schedules).forEach(([key, player]) => {
+      const name = player.personaName || key;
+      const lower = name.toLowerCase();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        playersToDisplay.push({
+          key,
+          name,
+          steamId: key,
+          slotId: player.slotId || key,
+        });
+      }
+    });
+  }
 
   // 3. Guarantee at least 4 squad slots are listed
   const minSquadSlots = Math.max(4, slots.length);
@@ -484,38 +486,42 @@ export default async function handler(req, res) {
     let members = [];
     const seenNames = new Set();
 
-    // 1. Process active slots from payload.slots
-    slots.forEach((s, idx) => {
-      const name = s.personaName || s.input || `Player #${s.id || idx + 1}`;
-      const lower = name.toLowerCase();
-      if (!seenNames.has(lower)) {
-        seenNames.add(lower);
-        members.push({
-          slotNumber: idx + 1,
-          name,
-          steamId: s.steamId || '',
-          input: s.input || '',
-        });
-      }
-    });
-
-    // 2. Process any extra players in schedules not already added
-    Object.entries(schedules).forEach(([key, player]) => {
-      const name = player.personaName || key;
-      const lower = name.toLowerCase();
-      if (!seenNames.has(lower)) {
-        seenNames.add(lower);
-        members.push({
-          slotNumber: members.length + 1,
-          name,
-          steamId: key.startsWith('7656') ? key : player.steamId || '',
-          input: name,
-        });
-      }
-    });
+    if (slots.length > 0) {
+      // 1. Process active slots strictly from payload.slots
+      slots.forEach((s, idx) => {
+        const name = s.personaName || s.input || `Player #${s.id || idx + 1}`;
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          members.push({
+            slotNumber: idx + 1,
+            name,
+            steamId: s.steamId || '',
+            input: s.input || '',
+            slotId: s.id || `${idx + 1}`,
+          });
+        }
+      });
+    } else {
+      // 2. Fallback if no slots array exists
+      Object.entries(schedules).forEach(([key, player]) => {
+        const name = player.personaName || key;
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          members.push({
+            slotNumber: members.length + 1,
+            name,
+            steamId: key.startsWith('7656') ? key : player.steamId || '',
+            input: name,
+            slotId: player.slotId || key,
+          });
+        }
+      });
+    }
 
     // 3. Guarantee at least 4 squad slots are shown
-    const totalSquadCapacity = Math.max(4, members.length);
+    const totalSquadCapacity = Math.max(4, slots.length);
     for (let i = members.length + 1; i <= totalSquadCapacity; i++) {
       members.push({
         slotNumber: i,
@@ -524,19 +530,35 @@ export default async function handler(req, res) {
       });
     }
 
+    // Check Discord User Bindings from mappings.users
+    const userBindings = mappings.users || {};
+
     // Format member lines for Discord Embed
     const memberLines = members.map((m) => {
       if (m.isEmpty) {
         return `👤 **Slot #${m.slotNumber}**: _Empty Slot (Unassigned)_`;
       }
 
+      // Check if any Discord user is bound to this member slot
+      let boundDiscordTag = '';
+      Object.entries(userBindings).forEach(([dUserId, boundVal]) => {
+        if (
+          boundVal &&
+          (boundVal === m.steamId ||
+            boundVal.toLowerCase() === m.name.toLowerCase() ||
+            boundVal === m.slotId)
+        ) {
+          boundDiscordTag = ` • *(Linked to <@${dUserId}>)*`;
+        }
+      });
+
       // Check if steamId is a valid 64-bit Steam ID (starts with 7656 and is 17 digits long)
       const is64BitSteamId = m.steamId && /^7656\d{13}$/.test(m.steamId);
 
       if (is64BitSteamId) {
-        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • 🆔 \`${m.steamId}\` • [Steam Profile](https://steamcommunity.com/profiles/${m.steamId})`;
+        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • 🆔 \`${m.steamId}\` • [Steam Profile](https://steamcommunity.com/profiles/${m.steamId})${boundDiscordTag}`;
       } else {
-        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • _Custom Account / Display Name_`;
+        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • _Custom Account / Display Name_${boundDiscordTag}`;
       }
     });
 
@@ -569,6 +591,7 @@ export default async function handler(req, res) {
     const boundSteam = mappings.users[discordUserId] || discordUsername;
     const payload = (await fetchCloudPayload(roomCode)) || { schedules: {} };
     if (!payload.schedules) payload.schedules = {};
+    const slots = payload.slots || [];
 
     let targetDateStr = new Date().toISOString().split('T')[0];
     let targetBlock = 'evening';
@@ -599,12 +622,45 @@ export default async function handler(req, res) {
       actionType = 'allday_clear';
     }
 
-    // Resolve player slot entry
-    let playerSlotKey = Object.keys(payload.schedules).find(
-      (k) =>
-        k === boundSteam ||
-        payload.schedules[k]?.personaName?.toLowerCase() === discordUsername.toLowerCase()
-    ) || boundSteam;
+    // Resolve player slot entry from slots or schedules
+    let playerSlotKey = null;
+
+    if (slots.length > 0) {
+      const matchingSlot = slots.find((s) => {
+        if (boundSteam && s.steamId === boundSteam) return true;
+        if (boundSteam && (s.personaName?.toLowerCase() === boundSteam.toLowerCase() || s.input?.toLowerCase() === boundSteam.toLowerCase())) return true;
+        if (discordUsername && (s.personaName?.toLowerCase() === discordUsername.toLowerCase() || s.input?.toLowerCase() === discordUsername.toLowerCase())) return true;
+        return false;
+      });
+
+      if (matchingSlot) {
+        playerSlotKey = matchingSlot.steamId || matchingSlot.id;
+      }
+    }
+
+    if (!playerSlotKey) {
+      playerSlotKey = Object.keys(payload.schedules).find(
+        (k) =>
+          k === boundSteam ||
+          payload.schedules[k]?.personaName?.toLowerCase() === discordUsername.toLowerCase() ||
+          payload.schedules[k]?.personaName?.toLowerCase() === boundSteam.toLowerCase()
+      );
+    }
+
+    // If still not matched, check if user is unbound and warn them ephemerally
+    if (!playerSlotKey && slots.length > 0 && !mappings.users[discordUserId]) {
+      return res.status(200).json({
+        type: 4,
+        data: {
+          content: `⚠️ <@${discordUserId}>, your Discord account is not linked to any of the 4 squad slots in room \`#${roomCode}\`!\nRun \`/squad-bind steam: <your Steam ID or display name>\` (e.g. \`/squad-bind steam: Reysol\`) to bind your account to your slot.`,
+          flags: 64, // Ephemeral message (only visible to caller)
+        },
+      });
+    }
+
+    if (!playerSlotKey) {
+      playerSlotKey = boundSteam;
+    }
 
     if (!payload.schedules[playerSlotKey]) {
       payload.schedules[playerSlotKey] = {

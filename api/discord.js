@@ -245,18 +245,25 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
       }
     });
   } else {
-    // 2. Fallback to schedules if no slots array exists
+    // 2. Fallback to schedules, strictly filtering for valid squad slot keys (1-4, slot-X, 64-bit SteamIDs)
     Object.entries(schedules).forEach(([key, player]) => {
-      const name = player.personaName || key;
-      const lower = name.toLowerCase();
-      if (!seenNames.has(lower)) {
-        seenNames.add(lower);
-        playersToDisplay.push({
-          key,
-          name,
-          steamId: key,
-          slotId: player.slotId || key,
-        });
+      const isSlotKey =
+        /^(slot-)?[1-4]$/.test(key) ||
+        key.startsWith('7656') ||
+        (player.slotId && /^(slot-)?[1-4]$/.test(player.slotId));
+
+      if (isSlotKey) {
+        const name = player.personaName || key;
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          playersToDisplay.push({
+            key,
+            name,
+            steamId: key.startsWith('7656') ? key : '',
+            slotId: player.slotId || key,
+          });
+        }
       }
     });
   }
@@ -656,20 +663,24 @@ export default async function handler(req, res) {
     }
 
     if (!playerSlotKey) {
-      playerSlotKey = Object.keys(payload.schedules).find(
-        (k) =>
+      playerSlotKey = Object.keys(payload.schedules).find((k) => {
+        const p = payload.schedules[k];
+        const isSlotKey = /^(slot-)?[1-4]$/.test(k) || k.startsWith('7656') || (p?.slotId && /^(slot-)?[1-4]$/.test(p.slotId));
+        if (!isSlotKey) return false;
+        return (
           k === boundSteam ||
-          payload.schedules[k]?.personaName?.toLowerCase() === discordUsername.toLowerCase() ||
-          payload.schedules[k]?.personaName?.toLowerCase() === boundSteam.toLowerCase()
-      );
+          p?.personaName?.toLowerCase() === discordUsername.toLowerCase() ||
+          p?.personaName?.toLowerCase() === boundSteam.toLowerCase()
+        );
+      });
     }
 
-    // If still not matched, check if user is unbound and warn them ephemerally
-    if (!playerSlotKey && slots.length > 0 && !mappings.users[discordUserId]) {
+    // If caller is NOT bound in mappings.users and not matched to a squad slot, return ephemeral warning
+    if (!playerSlotKey && !mappings.users[discordUserId]) {
       return res.status(200).json({
         type: 4,
         data: {
-          content: `⚠️ <@${discordUserId}>, your Discord account is not linked to any of the 4 squad slots in room \`#${roomCode}\`!\nRun \`/squad-bind steam: <your Steam ID or display name>\` (e.g. \`/squad-bind steam: Reysol\`) to bind your account to your slot.`,
+          content: `⚠️ <@${discordUserId}>, your Discord account is not linked to any squad slot in room \`#${roomCode}\`!\nRun \`/squad-bind steam: <your Steam ID or display name>\` (e.g. \`/squad-bind steam: Reysol\`) to bind your account to your slot.`,
           flags: 64, // Ephemeral message (only visible to caller)
         },
       });

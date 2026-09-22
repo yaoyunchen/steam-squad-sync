@@ -20,7 +20,10 @@ import {
   Coffee,
   Check,
   RefreshCw,
-  Cloud
+  Cloud,
+  Bot,
+  MessageSquare,
+  ExternalLink
 } from 'lucide-react';
 import { GameNightEvent, PlayerAvailability, SquadGameAnalysis, SteamUserSlot, ScheduleBlockId } from '../types/steam';
 import { StorageService } from '../services/storage';
@@ -133,6 +136,7 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
 
   // Event Modal State
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [isDiscordModalOpen, setIsDiscordModalOpen] = useState(false);
   const [modalGameName, setModalGameName] = useState('');
   const [modalAppId, setModalAppId] = useState<number>(0);
   const [modalDateStr, setModalDateStr] = useState(formatDateStr(new Date()));
@@ -618,6 +622,16 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
               Monthly View
             </button>
           </div>
+
+          {/* Discord Bot & Integration Button */}
+          <button
+            onClick={() => setIsDiscordModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-[#5865F2]/20 hover:bg-[#5865F2]/30 text-[#5865F2] text-xs font-bold rounded-lg border border-[#5865F2]/40 transition shadow"
+            title="Configure Discord Bot & Slash Commands"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            <span>Discord Bot</span>
+          </button>
 
           {/* Sync / Export JSON button */}
           <button
@@ -1528,6 +1542,139 @@ export const ScheduleTab: React.FC<ScheduleTabProps> = ({ slots, readyGames, nea
                 className="px-4 py-2 bg-steam-accent hover:bg-steam-accentHover text-steam-darkest font-bold text-xs rounded-lg shadow-glow-accent"
               >
                 Create Event
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: DISCORD BOT INTEGRATION & SLASH COMMANDS */}
+      {isDiscordModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-steam-card border border-[#5865F2]/60 rounded-xl p-6 w-full max-w-xl space-y-5 shadow-2xl animate-scaleUp">
+            <div className="flex items-center justify-between border-b border-steam-border/60 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center space-x-2">
+                <Bot className="w-5 h-5 text-[#5865F2]" />
+                <span>Discord Bot & Slash Commands Integration</span>
+              </h3>
+              <button
+                onClick={() => setIsDiscordModalOpen(false)}
+                className="text-steam-muted hover:text-white text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              {/* Step 1: Add Bot to Server */}
+              <div className="p-3.5 rounded-lg bg-steam-darkest border border-steam-border/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <MessageSquare className="w-4 h-4 text-[#5865F2]" />
+                    <span>1. Add Bot to Your Discord Server</span>
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#5865F2]/20 text-[#5865F2] font-bold">
+                    Official Bot Invite
+                  </span>
+                </div>
+                <p className="text-steam-muted text-[11px] leading-relaxed">
+                  Click the button below to authorize the Steam Squad Sync bot in your Discord server with slash command permissions.
+                </p>
+                <a
+                  href="https://discord.com/api/oauth2/authorize?client_id=1551789874061774979&permissions=277058072640&scope=bot%20applications.commands"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-2 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded flex items-center justify-center gap-2 transition shadow"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>Authorize & Invite Discord Bot to Server</span>
+                </a>
+              </div>
+
+              {/* Step 2: Set Interactions Endpoint URL */}
+              <div className="p-3.5 rounded-lg bg-steam-darkest border border-steam-border/60 space-y-2">
+                <span className="font-bold text-white block">2. Developer Portal Interactions Endpoint URL</span>
+                <p className="text-steam-muted text-[11px]">
+                  In your Discord Developer Portal, paste this URL into **INTERACTIONS ENDPOINT URL**:
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value="https://steam-squad-sync.vercel.app/api/discord"
+                    className="flex-1 bg-steam-card border border-steam-border rounded px-3 py-1.5 font-mono text-[11px] text-steam-accent select-all"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('https://steam-squad-sync.vercel.app/api/discord');
+                      showToast('Copied Interactions Endpoint URL!');
+                    }}
+                    className="px-3 py-1.5 bg-steam-card hover:bg-steam-cardHover border border-steam-border text-steam-text font-semibold rounded flex items-center gap-1 transition"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-steam-accent" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 3: Slash Commands Reference */}
+              <div className="p-3.5 rounded-lg bg-steam-darkest border border-steam-border/60 space-y-2">
+                <span className="font-bold text-white block">3. Available Discord Slash Commands</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  <div 
+                    onClick={() => {
+                      navigator.clipboard.writeText(`/squad-link code: ${roomCode || '8F3A19B2'}`);
+                      showToast('Copied /squad-link command!');
+                    }}
+                    className="p-2 rounded bg-steam-card border border-steam-border/40 hover:border-steam-accent/60 cursor-pointer transition"
+                  >
+                    <span className="font-mono font-bold text-steam-accent block">/squad-link code: {roomCode || '8F3A19B2'}</span>
+                    <span className="text-[10px] text-steam-muted">Link text channel to this room code</span>
+                  </div>
+
+                  <div 
+                    onClick={() => {
+                      const steamId = activeSlots[0]?.steamId || '76561198003985811';
+                      navigator.clipboard.writeText(`/squad-bind steam: ${steamId}`);
+                      showToast('Copied /squad-bind command!');
+                    }}
+                    className="p-2 rounded bg-steam-card border border-steam-border/40 hover:border-steam-accent/60 cursor-pointer transition"
+                  >
+                    <span className="font-mono font-bold text-steam-accent block">/squad-bind steam: {activeSlots[0]?.steamId || '76561198003985811'}</span>
+                    <span className="text-[10px] text-steam-muted">Bind Discord ID to your Steam account</span>
+                  </div>
+
+                  <div 
+                    onClick={() => {
+                      navigator.clipboard.writeText('/squad-free block: evening');
+                      showToast('Copied /squad-free command!');
+                    }}
+                    className="p-2 rounded bg-steam-card border border-steam-border/40 hover:border-steam-accent/60 cursor-pointer transition"
+                  >
+                    <span className="font-mono font-bold text-steam-accent block">/squad-free block: evening</span>
+                    <span className="text-[10px] text-steam-muted">Toggle your availability for tonight</span>
+                  </div>
+
+                  <div 
+                    onClick={() => {
+                      navigator.clipboard.writeText('/squad-status');
+                      showToast('Copied /squad-status command!');
+                    }}
+                    className="p-2 rounded bg-steam-card border border-steam-border/40 hover:border-steam-accent/60 cursor-pointer transition"
+                  >
+                    <span className="font-mono font-bold text-steam-accent block">/squad-status</span>
+                    <span className="text-[10px] text-steam-muted">Display live heatmap & status buttons</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-2 border-t border-steam-border/40">
+              <button
+                onClick={() => setIsDiscordModalOpen(false)}
+                className="px-4 py-2 bg-steam-accent hover:bg-steam-accentHover text-steam-darkest font-bold text-xs rounded-lg shadow-glow-accent"
+              >
+                Done
               </button>
             </div>
           </div>

@@ -209,28 +209,46 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
 
   const slots = payload?.slots || [];
   let playersToDisplay = [];
+  const seenNames = new Set();
 
-  if (slots.length > 0) {
-    playersToDisplay = slots.map((s) => ({
-      key: s.steamId || s.id,
-      name: s.personaName || s.input || `Player ${s.id}`,
-      steamId: s.steamId,
-      slotId: s.id,
-    }));
-  } else {
-    const seenNames = new Set();
-    Object.entries(schedules).forEach(([key, player]) => {
-      const name = player.personaName || key;
-      const lower = name.toLowerCase();
-      if (!seenNames.has(lower)) {
-        seenNames.add(lower);
-        playersToDisplay.push({
-          key,
-          name,
-          steamId: key,
-          slotId: player.slotId || key,
-        });
-      }
+  // 1. Add all slots from payload.slots
+  slots.forEach((s) => {
+    const name = s.personaName || s.input || `Player ${s.id}`;
+    const lower = name.toLowerCase();
+    if (!seenNames.has(lower)) {
+      seenNames.add(lower);
+      playersToDisplay.push({
+        key: s.steamId || s.id,
+        name,
+        steamId: s.steamId,
+        slotId: s.id,
+      });
+    }
+  });
+
+  // 2. Also add any additional entries from payload.schedules
+  Object.entries(schedules).forEach(([key, player]) => {
+    const name = player.personaName || key;
+    const lower = name.toLowerCase();
+    if (!seenNames.has(lower)) {
+      seenNames.add(lower);
+      playersToDisplay.push({
+        key,
+        name,
+        steamId: key,
+        slotId: player.slotId || key,
+      });
+    }
+  });
+
+  // 3. Guarantee at least 4 squad slots are listed
+  const minSquadSlots = Math.max(4, slots.length);
+  for (let i = playersToDisplay.length + 1; i <= minSquadSlots; i++) {
+    playersToDisplay.push({
+      key: `slot-${i}`,
+      name: `Player #${i}`,
+      steamId: '',
+      slotId: `${i}`,
     });
   }
 
@@ -260,13 +278,47 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
     }
   });
 
-  if (statusLines.length === 0) {
-    statusLines.push('_No player schedules recorded yet for this squad on this date._');
+  // Generate 7-Day Weekly Heatmap Overview Summary
+  let weeklySummaryLines = [];
+  const baseDate = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + i);
+    const dStr = d.toISOString().split('T')[0];
+    const dLabel = formatDateLabel(dStr);
+
+    let dayPlayerParts = [];
+    playersToDisplay.forEach((p) => {
+      const pSched =
+        schedules[p.key] ||
+        (p.steamId && schedules[p.steamId]) ||
+        (p.slotId && schedules[p.slotId]) ||
+        (p.slotId && schedules[`slot-${p.slotId}`]) ||
+        Object.values(schedules).find(
+          (sched) => sched.personaName && p.name && sched.personaName.toLowerCase() === p.name.toLowerCase()
+        );
+
+      const activeBlocks = [];
+      BLOCKS_CONFIG.forEach((block) => {
+        if (pSched?.grid && pSched.grid[`${dStr}-${block.id}`]) {
+          activeBlocks.push(block.short.split(' ')[0]);
+        }
+      });
+
+      if (activeBlocks.length > 0) {
+        dayPlayerParts.push(`**${p.name}** (${activeBlocks.join('')})`);
+      }
+    });
+
+    if (dayPlayerParts.length > 0) {
+      weeklySummaryLines.push(`• **${dLabel}**: 🟢 ${dayPlayerParts.join(', ')}`);
+    } else {
+      weeklySummaryLines.push(`• **${dLabel}**: ⚪ _No availability set_`);
+    }
   }
 
   // Generate 7 upcoming dates for Date Selector Dropdown
   const upcomingDates = [];
-  const baseDate = new Date();
   for (let i = 0; i < 7; i++) {
     const d = new Date(baseDate);
     d.setDate(baseDate.getDate() + i);
@@ -275,19 +327,22 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
     upcomingDates.push({ label, value: dStr });
   }
 
-  const embedDescription = noteMessage
-    ? `${noteMessage}\n\n**Squad Availability for ${formattedDate}:**\n${statusLines.join('\n')}`
-    : statusLines.join('\n');
+  let finalEmbedText = '';
+  if (noteMessage) {
+    finalEmbedText += `${noteMessage}\n\n`;
+  }
+  finalEmbedText += `📊 **7-Day Squad Heatmap Overview:**\n${weeklySummaryLines.join('\n')}\n\n`;
+  finalEmbedText += `🔍 **Detailed Breakdown for ${formattedDate}:**\n${statusLines.join('\n')}`;
 
   return {
     type: 4,
     data: {
       embeds: [
         {
-          title: `📅 Squad Availability Heatmap — Room #${roomCode} (${formattedDate})`,
+          title: `📅 Squad Availability Heatmap — Room #${roomCode}`,
           color: 0x66c0f4,
-          description: embedDescription,
-          footer: { text: `Date: ${activeDateStr} • Steam Squad Sync Real-Time Cloud` },
+          description: finalEmbedText,
+          footer: { text: `Active Date: ${activeDateStr} • Steam Squad Sync Real-Time Cloud` },
         },
       ],
       components: [
@@ -418,6 +473,53 @@ export default async function handler(req, res) {
     const targetDate = parseTargetDate(dateArg);
     const statusObj = await buildStatusResponse(roomCode, '', targetDate);
     return res.status(200).json(statusObj);
+  }
+
+  // Slash Command /squad-members
+  if (interaction.type === 2 && data.name === 'squad-members') {
+    const payload = await fetchCloudPayload(roomCode);
+    const slots = payload?.slots || [];
+    const schedules = payload?.schedules || {};
+
+    let memberLines = [];
+    if (slots.length > 0) {
+      slots.forEach((s, idx) => {
+        const name = s.personaName || s.input || `Player #${s.id}`;
+        const steamId = s.steamId || 'Not verified';
+        const profileUrl = steamId.startsWith('7656')
+          ? `[Steam Profile](https://steamcommunity.com/profiles/${steamId})`
+          : '_No URL_';
+        memberLines.push(`👤 **Slot #${idx + 1}**: **${name}** (\`${steamId}\`) • ${profileUrl}`);
+      });
+    } else {
+      const seenNames = new Set();
+      Object.entries(schedules).forEach(([key, player]) => {
+        const name = player.personaName || key;
+        const lower = name.toLowerCase();
+        if (!seenNames.has(lower)) {
+          seenNames.add(lower);
+          memberLines.push(`👤 **Player**: **${name}** (\`${key}\`)`);
+        }
+      });
+    }
+
+    if (memberLines.length === 0) {
+      memberLines.push('_No accounts recorded yet in this squad room._');
+    }
+
+    return res.status(200).json({
+      type: 4,
+      data: {
+        embeds: [
+          {
+            title: `🎮 Squad Members & Player Accounts — Room #${roomCode}`,
+            color: 0x66c0f4,
+            description: memberLines.join('\n\n'),
+            footer: { text: `Total Members: ${memberLines.length} • Steam Squad Sync` },
+          },
+        ],
+      },
+    });
   }
 
   // Component Interaction: Date Switcher Dropdown

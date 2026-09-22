@@ -37,11 +37,11 @@ export const StorageService = {
   getApiKey(): string {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.API_KEY);
-      if (!stored) return 'EB3D55C7CF9D061681597181ED1A426A';
+      if (!stored) return (import.meta as any).env?.VITE_STEAM_API_KEY || '';
       const decrypted = decryptSecret(stored);
-      return (decrypted && decrypted.trim().length > 0) ? decrypted : 'EB3D55C7CF9D061681597181ED1A426A';
+      return (decrypted && decrypted.trim().length > 0) ? decrypted : ((import.meta as any).env?.VITE_STEAM_API_KEY || '');
     } catch {
-      return 'EB3D55C7CF9D061681597181ED1A426A';
+      return (import.meta as any).env?.VITE_STEAM_API_KEY || '';
     }
   },
 

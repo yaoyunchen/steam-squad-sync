@@ -35,13 +35,11 @@ import { ScheduleTab } from './components/ScheduleTab';
 
 
 const DEFAULT_SLOTS: SteamUserSlot[] = [
-  { id: 'slot-1', input: 'https://steamcommunity.com/profiles/76561198003985811', steamId: '76561198003985811', personaName: 'RezWingz' },
-  { id: 'slot-2', input: 'https://steamcommunity.com/profiles/76561198034659844', steamId: '76561198034659844', personaName: 'Reysol' },
-  { id: 'slot-3', input: 'https://steamcommunity.com/profiles/76561198043877417', steamId: '76561198043877417', personaName: 'K derp' },
-  { id: 'slot-4', input: 'https://steamcommunity.com/profiles/76561198864094111', steamId: '76561198864094111', personaName: 'toast' },
+  { id: 'slot-1', input: '', steamId: '', personaName: '' },
+  { id: 'slot-2', input: '', steamId: '', personaName: '' },
 ];
 
-const DEFAULT_API_KEY = 'EB3D55C7CF9D061681597181ED1A426A';
+const DEFAULT_API_KEY = (import.meta as any).env?.VITE_STEAM_API_KEY || '';
 
 export const App: React.FC = () => {
   const [apiKey, setApiKey] = useState<string>(() => {

@@ -481,31 +481,66 @@ export default async function handler(req, res) {
     const slots = payload?.slots || [];
     const schedules = payload?.schedules || {};
 
-    let memberLines = [];
-    if (slots.length > 0) {
-      slots.forEach((s, idx) => {
-        const name = s.personaName || s.input || `Player #${s.id}`;
-        const steamId = s.steamId || 'Not verified';
-        const profileUrl = steamId.startsWith('7656')
-          ? `[Steam Profile](https://steamcommunity.com/profiles/${steamId})`
-          : '_No URL_';
-        memberLines.push(`👤 **Slot #${idx + 1}**: **${name}** (\`${steamId}\`) • ${profileUrl}`);
-      });
-    } else {
-      const seenNames = new Set();
-      Object.entries(schedules).forEach(([key, player]) => {
-        const name = player.personaName || key;
-        const lower = name.toLowerCase();
-        if (!seenNames.has(lower)) {
-          seenNames.add(lower);
-          memberLines.push(`👤 **Player**: **${name}** (\`${key}\`)`);
-        }
+    let members = [];
+    const seenNames = new Set();
+
+    // 1. Process active slots from payload.slots
+    slots.forEach((s, idx) => {
+      const name = s.personaName || s.input || `Player #${s.id || idx + 1}`;
+      const lower = name.toLowerCase();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        members.push({
+          slotNumber: idx + 1,
+          name,
+          steamId: s.steamId || '',
+          input: s.input || '',
+        });
+      }
+    });
+
+    // 2. Process any extra players in schedules not already added
+    Object.entries(schedules).forEach(([key, player]) => {
+      const name = player.personaName || key;
+      const lower = name.toLowerCase();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        members.push({
+          slotNumber: members.length + 1,
+          name,
+          steamId: key.startsWith('7656') ? key : player.steamId || '',
+          input: name,
+        });
+      }
+    });
+
+    // 3. Guarantee at least 4 squad slots are shown
+    const totalSquadCapacity = Math.max(4, members.length);
+    for (let i = members.length + 1; i <= totalSquadCapacity; i++) {
+      members.push({
+        slotNumber: i,
+        name: `Player #${i}`,
+        isEmpty: true,
       });
     }
 
-    if (memberLines.length === 0) {
-      memberLines.push('_No accounts recorded yet in this squad room._');
-    }
+    // Format member lines for Discord Embed
+    const memberLines = members.map((m) => {
+      if (m.isEmpty) {
+        return `👤 **Slot #${m.slotNumber}**: _Empty Slot (Unassigned)_`;
+      }
+
+      // Check if steamId is a valid 64-bit Steam ID (starts with 7656 and is 17 digits long)
+      const is64BitSteamId = m.steamId && /^7656\d{13}$/.test(m.steamId);
+
+      if (is64BitSteamId) {
+        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • 🆔 \`${m.steamId}\` • [Steam Profile](https://steamcommunity.com/profiles/${m.steamId})`;
+      } else {
+        return `👤 **Slot #${m.slotNumber}**: **${m.name}** • _Custom Account / Display Name_`;
+      }
+    });
+
+    const activeCount = members.filter((m) => !m.isEmpty).length;
 
     return res.status(200).json({
       type: 4,
@@ -515,7 +550,7 @@ export default async function handler(req, res) {
             title: `🎮 Squad Members & Player Accounts — Room #${roomCode}`,
             color: 0x66c0f4,
             description: memberLines.join('\n\n'),
-            footer: { text: `Total Members: ${memberLines.length} • Steam Squad Sync` },
+            footer: { text: `Active Members: ${activeCount} / ${totalSquadCapacity} • Steam Squad Sync` },
           },
         ],
       },

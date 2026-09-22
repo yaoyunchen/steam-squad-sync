@@ -147,13 +147,56 @@ async function pushCloudPayload(roomCode, payload) {
   }
 }
 
-// Fetch/Push Channel & User Mappings in Supabase
+// Fetch/Push Channel & User Mappings in dedicated 'discord_mappings' table in Supabase
 async function getMappings() {
+  const cleanUrl = SUPABASE_URL.replace(/\/$/, '');
+
+  try {
+    const res = await fetch(`${cleanUrl}/rest/v1/discord_mappings?id=eq.global&select=data`, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows.length > 0 && rows[0].data) {
+        return rows[0].data;
+      }
+    }
+  } catch (e) {
+    console.warn('Dedicated discord_mappings fetch fallback notice:', e);
+  }
+
+  // Fallback to squad_data table key 'DISCORD_MAPPINGS'
   const data = await fetchCloudPayload('DISCORD_MAPPINGS');
   return data || { channels: {}, users: {} };
 }
 
 async function saveMappings(mappings) {
+  const cleanUrl = SUPABASE_URL.replace(/\/$/, '');
+
+  try {
+    const res = await fetch(`${cleanUrl}/rest/v1/discord_mappings`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: JSON.stringify({
+        id: 'global',
+        data: mappings,
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    if (res.ok) return;
+  } catch (e) {
+    console.warn('Dedicated discord_mappings push fallback notice:', e);
+  }
+
+  // Fallback to squad_data table
   await pushCloudPayload('DISCORD_MAPPINGS', mappings);
 }
 
@@ -164,22 +207,56 @@ async function buildStatusResponse(roomCode, noteMessage = '', targetDateStr = n
   const activeDateStr = targetDateStr || new Date().toISOString().split('T')[0];
   const formattedDate = formatDateLabel(activeDateStr);
 
-  let statusLines = [];
-  Object.entries(schedules).forEach(([id, player]) => {
-    const name = player.personaName || `Player ${id}`;
-    const activeBlocks = [];
+  const slots = payload?.slots || [];
+  let playersToDisplay = [];
 
+  if (slots.length > 0) {
+    playersToDisplay = slots.map((s) => ({
+      key: s.steamId || s.id,
+      name: s.personaName || s.input || `Player ${s.id}`,
+      steamId: s.steamId,
+      slotId: s.id,
+    }));
+  } else {
+    const seenNames = new Set();
+    Object.entries(schedules).forEach(([key, player]) => {
+      const name = player.personaName || key;
+      const lower = name.toLowerCase();
+      if (!seenNames.has(lower)) {
+        seenNames.add(lower);
+        playersToDisplay.push({
+          key,
+          name,
+          steamId: key,
+          slotId: player.slotId || key,
+        });
+      }
+    });
+  }
+
+  let statusLines = [];
+  playersToDisplay.forEach((p) => {
+    const pSched =
+      schedules[p.key] ||
+      (p.steamId && schedules[p.steamId]) ||
+      (p.slotId && schedules[p.slotId]) ||
+      (p.slotId && schedules[`slot-${p.slotId}`]) ||
+      Object.values(schedules).find(
+        (sched) => sched.personaName && p.name && sched.personaName.toLowerCase() === p.name.toLowerCase()
+      );
+
+    const activeBlocks = [];
     BLOCKS_CONFIG.forEach((block) => {
       const key = `${activeDateStr}-${block.id}`;
-      if (player.grid && player.grid[key]) {
+      if (pSched?.grid && pSched.grid[key]) {
         activeBlocks.push(block.short);
       }
     });
 
     if (activeBlocks.length > 0) {
-      statusLines.push(`🟢 **${name}**: ${activeBlocks.join(', ')}`);
+      statusLines.push(`🟢 **${p.name}**: ${activeBlocks.join(', ')}`);
     } else {
-      statusLines.push(`⚪ **${name}**: Not set / Busy`);
+      statusLines.push(`⚪ **${p.name}**: Not set / Busy`);
     }
   });
 

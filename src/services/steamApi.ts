@@ -278,6 +278,7 @@ export const SteamApiService = {
 
     return {
       ...slot,
+      input: resolvedSteamId,
       steamId: resolvedSteamId,
       personaName: summary?.personaName || resolvedSteamId,
       avatarUrl: summary?.avatarUrl,

@@ -140,7 +140,7 @@ export const App: React.FC = () => {
       if (payload.slots && payload.slots.length >= 2) {
         loadedSlots = payload.slots.map(s => ({
           id: s.id,
-          input: s.input,
+          input: s.steamId || s.input,
           steamId: s.steamId,
           personaName: s.personaName,
           avatarUrl: s.avatarUrl,

@@ -129,9 +129,10 @@ export interface CleanedCloudPayload {
 export function sanitizeSlotsForCloud(slots: any[]): CompactCloudSlot[] {
   return slots.map((s, idx) => {
     const parsed = parseSteamInput(s.input || '');
+    const cleanInput = s.steamId || (parsed.type === 'steamid' ? parsed.value : '') || s.input || '';
     return {
       id: `${idx + 1}`,
-      input: parsed.value || s.input || '',
+      input: cleanInput,
       steamId: s.steamId,
       personaName: s.personaName,
       gameCount: s.gameCount,

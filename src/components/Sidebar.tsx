@@ -229,9 +229,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[11px] font-semibold text-steam-muted tracking-wider uppercase">
-                  Player #{idx + 1}
-                </span>
+                <div className="flex items-center gap-1.5 overflow-hidden">
+                  <span className="text-[11px] font-semibold text-steam-muted tracking-wider uppercase flex-shrink-0">
+                    Player #{idx + 1}
+                  </span>
+                  {slot.personaName && (
+                    <span className="text-[11px] font-bold text-steam-accent truncate">
+                      • {slot.personaName}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2">
                   {slot.isLoading && (
                     <Loader2 className="w-3 h-3 text-steam-accent animate-spin" />
